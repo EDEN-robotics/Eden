@@ -299,43 +299,83 @@ const UseCases = () => {
 const Team = () => {
   const teamMembers = [
     {
-      name: "Team Member 1",
-      role: "Lead Researcher",
-      image: "https://via.placeholder.com/400x400/1a1a1a/ffffff?text=Member+1",
+      name: "Vedant Soni",
+      role: "Project Lead",
+      image: "/team/vedant-soni.jpg",
       socials: {
-        github: "#",
-        linkedin: "#",
-        twitter: "#"
+        linkedin: "https://www.linkedin.com/in/vedantsonimech/"
       }
     },
     {
-      name: "Team Member 2",
-      role: "Robotics Engineer",
-      image: "https://via.placeholder.com/400x400/1a1a1a/ffffff?text=Member+2",
+      name: "Sebastian Chu",
+      role: "Electrical Engineer",
+      image: "/team/sebastian-chu.jpg",
       socials: {
-        github: "#",
-        linkedin: "#",
-        twitter: "#"
+        linkedin: "https://www.linkedin.com/in/sebcchu/"
       }
     },
     {
-      name: "Team Member 3",
-      role: "AI Specialist",
-      image: "https://via.placeholder.com/400x400/1a1a1a/ffffff?text=Member+3",
+      name: "Sebastian Dayer",
+      role: "Mechanical Engineer",
+      image: "/team/sebastian-dayer.jpg",
       socials: {
-        github: "#",
-        linkedin: "#",
-        twitter: "#"
+        linkedin: "https://www.linkedin.com/in/sebastian-dayer/"
       }
     },
     {
-      name: "Team Member 4",
-      role: "Systems Architect",
-      image: "https://via.placeholder.com/400x400/1a1a1a/ffffff?text=Member+4",
+      name: "Paavan Bagla",
+      role: "Software Engineer",
+      image: "/team/paavan-bagla.jpg",
       socials: {
-        github: "#",
-        linkedin: "#",
-        twitter: "#"
+        linkedin: "https://www.linkedin.com/in/paavanbagla/"
+      }
+    },
+    {
+      name: "Haren Thorat",
+      role: "Software Engineer",
+      image: "/team/haren-thorat.jpg",
+      socials: {
+        linkedin: "https://www.linkedin.com/in/haren-thorat/"
+      }
+    },
+    {
+      name: "William Lam",
+      role: "Mechanical Engineer",
+      image: "/team/william-lam.jpg",
+      socials: {
+        linkedin: "https://www.linkedin.com/in/swwilliamlam/"
+      }
+    },
+    {
+      name: "Dillon Markentell",
+      role: "Mechanical Engineer",
+      image: "/team/dillon-markentell.jpg",
+      socials: {
+        linkedin: "https://www.linkedin.com/in/dillon-markentell-0630b5350/"
+      }
+    },
+    {
+      name: "Krish Singh",
+      role: "Software Engineer",
+      image: "/team/krish-singh.jpg",
+      socials: {
+        linkedin: "https://www.linkedin.com/in/krish-singh2007/"
+      }
+    },
+    {
+      name: "Juan Gomez Sandoval",
+      role: "Electrical Engineer",
+      image: "/team/juan-gomez-sandoval.jpg",
+      socials: {
+        linkedin: "https://www.linkedin.com/in/juan-gomez-sandoval-24aa55239/"
+      }
+    },
+    {
+      name: "Andrew Zheng",
+      role: "Software Engineer",
+      image: "/team/andrew-zheng.jpg",
+      socials: {
+        linkedin: "#"
       }
     }
   ];
@@ -726,9 +766,14 @@ export default function App() {
             />
             <GitHubStats />
             <div className="flex justify-center gap-6 mt-12">
-              <button className="px-8 py-4 bg-white text-black font-semibold rounded-full hover:bg-gray-200 transition-all flex items-center gap-3">
+              <a
+                href="https://github.com/EDEN-robotics"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-8 py-4 bg-white text-black font-semibold rounded-full hover:bg-gray-200 transition-all flex items-center gap-3"
+              >
                 <Github size={18} /> Join Organization
-              </button>
+              </a>
               <button className="px-8 py-4 bg-transparent border border-white/10 text-white font-semibold rounded-full hover:bg-white/5 transition-all">
                 Browse Documentation
               </button>
