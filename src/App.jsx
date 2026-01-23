@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 import {
   Brain,
@@ -480,9 +481,12 @@ export default function App() {
               >
                 Read Poster <ArrowRight size={18} />
               </a>
-              <button className="px-8 py-4 bg-transparent border border-white/10 text-white font-semibold rounded-full hover:bg-white/5 transition-all">
+              <Link
+                to="/docs"
+                className="px-8 py-4 bg-transparent border border-white/10 text-white font-semibold rounded-full hover:bg-white/5 transition-all"
+              >
                 View Documentation
-              </button>
+              </Link>
             </div>
 
 
@@ -779,9 +783,12 @@ export default function App() {
               >
                 <Github size={18} /> Join Organization
               </a>
-              <button className="px-8 py-4 bg-transparent border border-white/10 text-white font-semibold rounded-full hover:bg-white/5 transition-all">
+              <Link
+                to="/docs"
+                className="px-8 py-4 bg-transparent border border-white/10 text-white font-semibold rounded-full hover:bg-white/5 transition-all"
+              >
                 Browse Documentation
-              </button>
+              </Link>
             </div>
           </div>
         </section>
