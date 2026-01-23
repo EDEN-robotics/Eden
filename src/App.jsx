@@ -472,9 +472,14 @@ export default function App() {
             className="flex flex-col items-center gap-4"
           >
             <div className="flex gap-4 mb-20">
-              <button className="px-8 py-4 bg-white text-black font-semibold rounded-full hover:bg-gray-200 transition-all flex items-center gap-3">
+              <a
+                href={`${import.meta.env.BASE_URL}poster.pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-8 py-4 bg-white text-black font-semibold rounded-full hover:bg-gray-200 transition-all flex items-center gap-3"
+              >
                 Read Poster <ArrowRight size={18} />
-              </button>
+              </a>
               <button className="px-8 py-4 bg-transparent border border-white/10 text-white font-semibold rounded-full hover:bg-white/5 transition-all">
                 View Documentation
               </button>
