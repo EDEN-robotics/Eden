@@ -375,7 +375,7 @@ const Team = () => {
       role: "Software Engineer",
       image: "/team/andrew-zheng.jpg",
       socials: {
-        linkedin: "#"
+        linkedin: "https://www.linkedin.com/in/andrew--zheng/"
       }
     }
   ];
