@@ -394,7 +394,7 @@ const Team = () => {
           {/* Image */}
           <div className="aspect-square overflow-hidden bg-white/5">
             <img
-              src={member.image}
+              src={`${import.meta.env.BASE_URL}${member.image.replace(/^\//, '')}`}
               alt={member.name}
               className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 group-hover:scale-110"
             />
