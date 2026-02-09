@@ -297,8 +297,47 @@ const UseCases = () => {
   );
 };
 
+const TeamMemberCard = ({ member, index }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.6, delay: index * 0.1 }}
+    viewport={{ once: true }}
+    className="group relative overflow-hidden rounded-2xl"
+  >
+    {/* Image */}
+    <div className="aspect-square overflow-hidden bg-white/5">
+      <img
+        src={`${import.meta.env.BASE_URL}${member.image.replace(/^\//, '')}`}
+        alt={member.name}
+        className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 group-hover:scale-110"
+      />
+    </div>
+
+    {/* Overlay with socials - appears on hover */}
+    <motion.div
+      initial={{ opacity: 0 }}
+      whileHover={{ opacity: 1 }}
+      className="absolute inset-0 bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-all duration-300"
+    >
+      <h3 className="text-xl font-bold">{member.name}</h3>
+      <p className="text-text-dim text-sm font-mono uppercase tracking-widest">{member.role}</p>
+      <div className="flex gap-4 mt-4">
+        <a
+          href={member.socials.linkedin}
+          className="w-10 h-10 rounded-full bg-white/10 hover:bg-white hover:text-black flex items-center justify-center transition-all"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <Linkedin size={18} />
+        </a>
+      </div>
+    </motion.div>
+  </motion.div>
+);
+
 const Team = () => {
-  const teamMembers = [
+  const currentMembers = [
     {
       name: "Vedant Soni",
       role: "Project Lead",
@@ -364,64 +403,55 @@ const Team = () => {
       }
     },
     {
-      name: "Juan Gomez Sandoval",
-      role: "Electrical Engineer",
-      image: "/team/juan-gomez-sandoval.jpg",
-      socials: {
-        linkedin: "https://www.linkedin.com/in/juan-gomez-sandoval-24aa55239/"
-      }
-    },
-    {
       name: "Andrew Zheng",
       role: "Software Engineer",
       image: "/team/andrew-zheng.jpg",
       socials: {
         linkedin: "https://www.linkedin.com/in/andrew--zheng/"
       }
+    },
+    {
+      name: "Dhruv Bhambhani",
+      role: "Software Engineer",
+      image: "/team/dhruv-bhambhani.jpg",
+      socials: {
+        linkedin: "https://www.linkedin.com/in/dhruvbhambhani05/"
+      }
+    }
+  ];
+
+  const previousMembers = [
+    {
+      name: "Juan Gomez Sandoval",
+      role: "Electrical Engineer",
+      image: "/team/juan-gomez-sandoval.jpg",
+      socials: {
+        linkedin: "https://www.linkedin.com/in/juan-gomez-sandoval-24aa55239/"
+      }
     }
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-      {teamMembers.map((member, i) => (
-        <motion.div
-          key={i}
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: i * 0.1 }}
-          viewport={{ once: true }}
-          className="group relative overflow-hidden rounded-2xl"
-        >
-          {/* Image */}
-          <div className="aspect-square overflow-hidden bg-white/5">
-            <img
-              src={`${import.meta.env.BASE_URL}${member.image.replace(/^\//, '')}`}
-              alt={member.name}
-              className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500 group-hover:scale-110"
-            />
-          </div>
+    <div className="space-y-16">
+      {/* Current Members */}
+      <div>
+        <h3 className="text-2xl font-bold mb-8 text-white/80">Current Members</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {currentMembers.map((member, i) => (
+            <TeamMemberCard key={i} member={member} index={i} />
+          ))}
+        </div>
+      </div>
 
-          {/* Overlay with socials - appears on hover */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            whileHover={{ opacity: 1 }}
-            className="absolute inset-0 bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center gap-4 opacity-0 group-hover:opacity-100 transition-all duration-300"
-          >
-            <h3 className="text-xl font-bold">{member.name}</h3>
-            <p className="text-text-dim text-sm font-mono uppercase tracking-widest">{member.role}</p>
-            <div className="flex gap-4 mt-4">
-              <a
-                href={member.socials.linkedin}
-                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white hover:text-black flex items-center justify-center transition-all"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Linkedin size={18} />
-              </a>
-            </div>
-          </motion.div>
-        </motion.div>
-      ))}
+      {/* Previous Members */}
+      <div>
+        <h3 className="text-2xl font-bold mb-8 text-white/80">Previous Members</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {previousMembers.map((member, i) => (
+            <TeamMemberCard key={i} member={member} index={i} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 };
