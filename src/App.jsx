@@ -417,6 +417,14 @@ const Team = () => {
       socials: {
         linkedin: "https://www.linkedin.com/in/dhruvbhambhani05/"
       }
+    },
+    {
+      name: "Sphoorthi Gurram",
+      role: "Software Engineer",
+      image: "/team/sphoorthi-gurram.jpg",
+      socials: {
+        linkedin: "https://www.linkedin.com/in/sphoorthi-gurram/"
+      }
     }
   ];
 
