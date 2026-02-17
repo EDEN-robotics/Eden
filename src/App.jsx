@@ -420,7 +420,7 @@ const Team = () => {
     },
     {
       name: "Sphoorthi Gurram",
-      role: "Software Engineer",
+      role: "Computer Engineer",
       image: "/team/sphoorthi-gurram.jpg",
       socials: {
         linkedin: "https://www.linkedin.com/in/sphoorthi-gurram/"
