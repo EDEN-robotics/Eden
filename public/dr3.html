@@ -697,7 +697,7 @@
         </div>
         <div class="card">
           <strong>Environmental Understanding</strong>
-          <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Build spatial map of Turtle Lab. Track object locations and states. Scene understanding similar to NVIDIA/Tesla approaches.</p>
+          <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Build spatial map of custom environment. Track object locations and states. Scene understanding similar to NVIDIA/Tesla approaches.</p>
         </div>
         <div class="card">
           <strong>Context Prioritization</strong>
@@ -717,46 +717,92 @@
     </div>
   </div>
 
-  <!-- ============ SLIDE 8: COGNITIVE LAYER - MEMORY ============ -->
+  <!-- ============ SLIDE 8: COGNITIVE LAYER - MEMORY TYPES ============ -->
   <div class="slide bg-soft" data-bg="light">
-    <div class="split-60-40">
+    <div class="split">
       <div>
         <div class="section-label reveal">Layer 3 &mdash; Memory</div>
-        <h2 class="title-medium reveal d1">Cognitive Layer:<br>Memory System</h2>
+        <h2 class="title-medium reveal d1">Cognitive Layer:<br>Memory Classification</h2>
         <div class="accent-line reveal d2"></div>
         <div style="margin-top: 12px;" class="reveal d3">
           <span class="layer-badge badge-cognitive">Cognitive Layer</span>
         </div>
-
-        <div class="grid-2 reveal d4" style="margin-top: 20px;">
-          <div class="card-light card-accent">
-            <strong>SuperMemory Integration</strong>
-            <p style="font-size: 12px; opacity: 0.6; margin-top: 4px;">Native package, knowledge graph visualization, optimized API calls, local caching layer.</p>
+        <p class="body-text reveal d4" style="margin-top: 16px; opacity: 0.6;">
+          Four distinct memory types, each stored and retrieved differently. Memories strengthen through repeated encounters and decay when unused.
+        </p>
+      </div>
+      <div class="reveal d4">
+        <div class="grid-2" style="gap: 16px;">
+          <div class="card-light" style="padding: 24px; border-left: 4px solid var(--deep-red);">
+            <h3 style="font-size: 22px; margin-bottom: 6px;">Episodic</h3>
+            <p style="font-size: 15px; opacity: 0.7;">Specific events</p>
+            <p style="font-size: 14px; opacity: 0.45; margin-top: 8px; font-style: italic;">"Ian left a can on the table"</p>
           </div>
-          <div class="card-light card-accent">
-            <strong>Memory Decay &amp; Consolidation</strong>
-            <p style="font-size: 12px; opacity: 0.6; margin-top: 4px;">Short-term &rarr; Long-term pipeline. Forgetting curve for low-importance memories. Strengthen through repetition.</p>
+          <div class="card-light" style="padding: 24px; border-left: 4px solid var(--accent-gold);">
+            <h3 style="font-size: 22px; margin-bottom: 6px;">Semantic</h3>
+            <p style="font-size: 15px; opacity: 0.7;">Facts &amp; rules</p>
+            <p style="font-size: 14px; opacity: 0.45; margin-top: 8px; font-style: italic;">"Lab rule: no food on tables"</p>
+          </div>
+          <div class="card-light" style="padding: 24px; border-left: 4px solid var(--soft-green);">
+            <h3 style="font-size: 22px; margin-bottom: 6px;">Procedural</h3>
+            <p style="font-size: 15px; opacity: 0.7;">How-to knowledge</p>
+            <p style="font-size: 14px; opacity: 0.45; margin-top: 8px; font-style: italic;">"How to clean up spills"</p>
+          </div>
+          <div class="card-light" style="padding: 24px; border-left: 4px solid var(--deep-purple);">
+            <h3 style="font-size: 22px; margin-bottom: 6px;">Social</h3>
+            <p style="font-size: 15px; opacity: 0.7;">Relationships</p>
+            <p style="font-size: 14px; opacity: 0.45; margin-top: 8px; font-style: italic;">"Ian is sometimes careless"</p>
           </div>
         </div>
       </div>
-      <div class="reveal d5">
-        <div class="card-light" style="padding: 24px; margin-bottom: 16px;">
-          <div class="subtitle" style="font-size: 11px; margin-bottom: 12px;">4 Types of Memory</div>
-          <div class="stack-tight" style="gap: 10px;">
-            <div style="font-size: 14px;"><strong style="color: var(--deep-red);">Episodic</strong> &mdash; specific events<br><span style="font-size: 12px; opacity: 0.5;">"Ian left a can on the table"</span></div>
-            <div style="font-size: 14px;"><strong style="color: var(--deep-red);">Semantic</strong> &mdash; facts &amp; rules<br><span style="font-size: 12px; opacity: 0.5;">"Lab rule: no food on tables"</span></div>
-            <div style="font-size: 14px;"><strong style="color: var(--deep-red);">Procedural</strong> &mdash; how-to knowledge<br><span style="font-size: 12px; opacity: 0.5;">"How to clean up spills"</span></div>
-            <div style="font-size: 14px;"><strong style="color: var(--deep-red);">Social</strong> &mdash; relationships<br><span style="font-size: 12px; opacity: 0.5;">"Ian is sometimes careless"</span></div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 9: COGNITIVE LAYER - MEMORY SYSTEM ============ -->
+  <div class="slide bg-cream" data-bg="light">
+    <div class="split">
+      <div>
+        <div class="section-label reveal">Layer 3 &mdash; Memory System</div>
+        <h2 class="title-medium reveal d1">Conversational<br>Memory</h2>
+        <div class="accent-line reveal d2"></div>
+
+        <div class="stack reveal d3" style="margin-top: 16px; gap: 16px;">
+          <div class="card-light" style="padding: 24px; border-left: 4px solid var(--deep-red);">
+            <h3 style="font-size: 20px; margin-bottom: 8px;">Short-Term Memory</h3>
+            <ul class="clean" style="font-size: 14px;">
+              <li>Use LLM's context window (8k&ndash;32k tokens)</li>
+              <li>Maintain current conversation state</li>
+              <li>Track immediate goals and sub-tasks</li>
+            </ul>
+          </div>
+          <div class="card-light" style="padding: 24px; border-left: 4px solid var(--deep-purple);">
+            <h3 style="font-size: 20px; margin-bottom: 8px;">Long-Term Memory</h3>
+            <ul class="clean" style="font-size: 14px;">
+              <li>Store in SuperMemory after conversation</li>
+              <li>Extract key facts, preferences, commitments</li>
+              <li>Link to knowledge graph</li>
+            </ul>
           </div>
         </div>
-        <div class="card-light" style="padding: 16px;">
-          <div class="subtitle" style="font-size: 10px; margin-bottom: 8px;">Importance Score Function</div>
-          <div class="code-block" style="font-size: 11px; padding: 12px; background: #1a1a2e;">
+      </div>
+      <div class="reveal d4">
+        <div class="card-light" style="padding: 24px; margin-bottom: 16px;">
+          <h3 style="font-size: 18px; margin-bottom: 12px;">Memory Decay &amp; Consolidation</h3>
+          <ul class="clean" style="font-size: 14px;">
+            <li>Short-term &rarr; Long-term memory pipeline</li>
+            <li>Forgetting curve for low-importance memories</li>
+            <li><strong>Strengthen memories through repeated encounters</strong></li>
+          </ul>
+        </div>
+        <div class="card-light" style="padding: 24px;">
+          <div class="subtitle" style="font-size: 11px; margin-bottom: 12px;">Importance Score Function</div>
+          <div class="code-block" style="font-size: 13px; padding: 16px; background: #1a1a2e; line-height: 1.8;">
 <span class="key">Importance</span> = f(
   <span class="str">Relevance to function</span>,
   <span class="str">Social relationship impact</span>,
   <span class="str">Rule/safety implications</span>,
-  <span class="str">Frequency</span>, <span class="str">Recency</span>,
+  <span class="str">Frequency of occurrence</span>,
+  <span class="str">Recency</span>,
   <span class="str">Emotional valence</span>
 )
           </div>
@@ -765,7 +811,7 @@
     </div>
   </div>
 
-  <!-- ============ SLIDE 9: COGNITIVE LAYER - PERSONALITY ============ -->
+  <!-- ============ SLIDE 10: COGNITIVE LAYER - PERSONALITY ============ -->
   <div class="slide bg-cream" data-bg="light">
     <div class="split">
       <div>
