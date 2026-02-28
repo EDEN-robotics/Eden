@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDEN Design Review 3</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --cream: #F5F0E8;
+    --warm-white: #FAF7F2;
+    --deep-red: #C23B22;
+    --dark-red: #8B1A1A;
+    --charcoal: #2C2C2C;
+    --warm-gray: #6B6560;
+    --light-gray: #B8B0A6;
+    --accent-gold: #D4A843;
+    --soft-green: #4A7C59;
+    --deep-purple: #6B5B95;
+    --ink: #1A1A1A;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--ink);
+    font-family: 'Inter', -apple-system, sans-serif;
+  }
+
+  .slide-deck {
+    width: 100%; height: 100%;
+    position: relative;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 60px 80px;
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .slide.active {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: all;
+  }
+
+  .slide.exit {
+    opacity: 0;
+    transform: translateY(-30px);
+  }
+
+  /* ---- SLIDE BACKGROUNDS ---- */
+  .bg-cream { background: var(--cream); color: var(--charcoal); }
+  .bg-dark { background: var(--ink); color: var(--cream); }
+  .bg-red { background: var(--deep-red); color: var(--warm-white); }
+  .bg-warm { background: #E8DDD0; color: var(--charcoal); }
+  .bg-charcoal { background: var(--charcoal); color: var(--cream); }
+  .bg-gradient {
+    background: linear-gradient(135deg, var(--ink) 0%, #2a1a1a 50%, var(--dark-red) 100%);
+    color: var(--cream);
+  }
+  .bg-soft {
+    background: linear-gradient(180deg, var(--cream) 0%, #E8DDD0 100%);
+    color: var(--charcoal);
+  }
+
+  /* ---- TYPOGRAPHY ---- */
+  h1, h2, h3 {
+    font-family: 'Playfair Display', Georgia, serif;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  .title-huge {
+    font-size: clamp(48px, 7vw, 120px);
+    font-weight: 900;
+  }
+
+  .title-large {
+    font-size: clamp(36px, 4.5vw, 72px);
+    font-weight: 700;
+  }
+
+  .title-medium {
+    font-size: clamp(28px, 3vw, 48px);
+    font-weight: 700;
+  }
+
+  .subtitle {
+    font-family: 'Inter', sans-serif;
+    font-size: clamp(14px, 1.4vw, 22px);
+    font-weight: 300;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: 0.7;
+  }
+
+  .body-text {
+    font-family: 'Inter', sans-serif;
+    font-size: clamp(14px, 1.2vw, 20px);
+    line-height: 1.7;
+    font-weight: 400;
+    max-width: 700px;
+  }
+
+  .accent-line {
+    width: 60px;
+    height: 3px;
+    background: var(--deep-red);
+    margin: 20px 0;
+  }
+
+  .accent-line-light {
+    width: 60px;
+    height: 3px;
+    background: var(--accent-gold);
+    margin: 20px 0;
+  }
+
+  .section-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    opacity: 0.5;
+    margin-bottom: 24px;
+  }
+
+  .red { color: var(--deep-red); }
+  .gold { color: var(--accent-gold); }
+  .green { color: var(--soft-green); }
+  .muted { opacity: 0.6; }
+
+  /* ---- LAYOUTS ---- */
+  .split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 60px;
+    align-items: center;
+    height: 100%;
+  }
+
+  .split-40-60 {
+    display: grid;
+    grid-template-columns: 2fr 3fr;
+    gap: 60px;
+    align-items: start;
+    height: 100%;
+    padding-top: 40px;
+  }
+
+  .split-60-40 {
+    display: grid;
+    grid-template-columns: 3fr 2fr;
+    gap: 60px;
+    align-items: start;
+    height: 100%;
+    padding-top: 40px;
+  }
+
+  .center-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .stack-tight { display: flex; flex-direction: column; gap: 8px; }
+
+  /* ---- COMPONENTS ---- */
+  .card {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 24px;
+    backdrop-filter: blur(8px);
+  }
+
+  .card-light {
+    background: rgba(0,0,0,0.03);
+    border: 1px solid rgba(0,0,0,0.06);
+    border-radius: 12px;
+    padding: 24px;
+  }
+
+  .card-accent {
+    border-left: 3px solid var(--deep-red);
+    padding-left: 20px;
+  }
+
+  .tag {
+    display: inline-block;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 4px 12px;
+    border-radius: 4px;
+    background: rgba(194, 59, 34, 0.12);
+    color: var(--deep-red);
+  }
+
+  .tag-dark {
+    background: rgba(255,255,255,0.1);
+    color: var(--cream);
+  }
+
+  .layer-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .badge-input { background: #B5E8F0; color: #1a3a3f; }
+  .badge-context { background: #F0A6C0; color: #3f1a2a; }
+  .badge-cognitive { background: #B5A6F0; color: #1a1a3f; }
+  .badge-planning { background: #F0C0A6; color: #3f2a1a; }
+  .badge-action { background: #D4E84D; color: #2a3f1a; }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+  }
+
+  .timeline-item {
+    position: relative;
+    padding-left: 24px;
+    padding-bottom: 20px;
+    border-left: 2px solid rgba(194, 59, 34, 0.25);
+  }
+
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -5px;
+    top: 6px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--deep-red);
+  }
+
+  .timeline-item.done::before {
+    background: var(--soft-green);
+  }
+
+  .timeline-item.active::before {
+    background: var(--accent-gold);
+    box-shadow: 0 0 0 4px rgba(212, 168, 67, 0.25);
+  }
+
+  .flow-diagram {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 20px 0;
+  }
+
+  .flow-box {
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    min-width: 100px;
+  }
+
+  .flow-arrow {
+    font-size: 20px;
+    opacity: 0.4;
+  }
+
+  .number-big {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: clamp(48px, 5vw, 80px);
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .member-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .member-card {
+    text-align: center;
+    padding: 16px 8px;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.03);
+    border: 1px solid rgba(0,0,0,0.05);
+  }
+
+  .member-card .name {
+    font-weight: 600;
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+
+  .member-card .role {
+    font-size: 11px;
+    opacity: 0.6;
+  }
+
+  /* ---- CODE BLOCK ---- */
+  .code-block {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    padding: 20px;
+    border-radius: 8px;
+    line-height: 1.6;
+    overflow-x: auto;
+  }
+
+  .code-block .key { color: #82AAFF; }
+  .code-block .str { color: #C3E88D; }
+  .code-block .num { color: #F78C6C; }
+  .code-block .comment { color: #546E7A; }
+
+  /* ---- ANIMATIONS ---- */
+  .reveal {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.5s ease, transform 0.5s ease;
+  }
+
+  .slide.active .reveal {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .slide.active .reveal.d1 { transition-delay: 0.1s; }
+  .slide.active .reveal.d2 { transition-delay: 0.2s; }
+  .slide.active .reveal.d3 { transition-delay: 0.3s; }
+  .slide.active .reveal.d4 { transition-delay: 0.4s; }
+  .slide.active .reveal.d5 { transition-delay: 0.5s; }
+  .slide.active .reveal.d6 { transition-delay: 0.6s; }
+  .slide.active .reveal.d7 { transition-delay: 0.7s; }
+  .slide.active .reveal.d8 { transition-delay: 0.8s; }
+
+  /* ---- PROGRESS BAR ---- */
+  .progress-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    background: var(--deep-red);
+    transition: width 0.4s ease;
+    z-index: 100;
+  }
+
+  /* ---- NAV DOTS ---- */
+  .nav-dots {
+    position: fixed;
+    right: 24px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+  }
+
+  .nav-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: none;
+    padding: 0;
+  }
+
+  .nav-dot.active {
+    background: var(--deep-red);
+    transform: scale(1.4);
+  }
+
+  /* ---- SLIDE COUNTER ---- */
+  .slide-counter {
+    position: fixed;
+    bottom: 24px;
+    right: 32px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    opacity: 0.4;
+    z-index: 100;
+  }
+
+  /* ---- DATE LABEL ---- */
+  .date-label {
+    position: fixed;
+    top: 24px;
+    right: 32px;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.4;
+    z-index: 100;
+  }
+
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 900px) {
+    .slide { padding: 32px 40px; }
+    .split, .split-40-60, .split-60-40 { grid-template-columns: 1fr; gap: 24px; }
+    .grid-3 { grid-template-columns: 1fr 1fr; }
+    .member-grid { grid-template-columns: repeat(3, 1fr); }
+    .nav-dots { display: none; }
+  }
+
+  /* Bullet list styling */
+  ul.clean {
+    list-style: none;
+    padding: 0;
+  }
+
+  ul.clean li {
+    position: relative;
+    padding-left: 20px;
+    margin-bottom: 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: clamp(13px, 1.1vw, 17px);
+    line-height: 1.6;
+  }
+
+  ul.clean li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 10px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--deep-red);
+  }
+
+  .bg-dark ul.clean li::before,
+  .bg-gradient ul.clean li::before,
+  .bg-charcoal ul.clean li::before {
+    background: var(--accent-gold);
+  }
+
+  ol.styled {
+    padding-left: 24px;
+    font-family: 'Inter', sans-serif;
+    font-size: clamp(13px, 1.1vw, 17px);
+    line-height: 1.8;
+  }
+
+  ol.styled li {
+    margin-bottom: 8px;
+  }
+
+  /* Metric boxes */
+  .metric-box {
+    text-align: center;
+    padding: 16px;
+    border-radius: 8px;
+  }
+  .metric-value {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 28px;
+    font-weight: 900;
+    line-height: 1.2;
+  }
+  .metric-label {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+</style>
+</head>
+<body>
+
+<div class="progress-bar" id="progress"></div>
+<div class="date-label" id="dateLabel">28 February 2026</div>
+
+<div class="slide-deck" id="deck">
+
+  <!-- ============ SLIDE 1: TITLE ============ -->
+  <div class="slide bg-cream active" data-bg="light">
+    <div class="section-label reveal">28 February 2026</div>
+    <h1 class="title-huge reveal d1" style="max-width: 800px;">EDEN Design<br>Review 3</h1>
+    <div class="accent-line reveal d2"></div>
+    <p class="body-text reveal d3" style="margin-top: 8px; opacity: 0.6;">
+      Making the Project Perfect &mdash; Spring 2026
+    </p>
+    <p class="body-text reveal d4" style="margin-top: 24px; font-size: 14px; opacity: 0.45;">
+      Texas A&M University &bull; TURTLE Lab &bull; Project Lead: Vedant Soni
+    </p>
+  </div>
+
+  <!-- ============ SLIDE 2: WHAT IS EDEN ============ -->
+  <div class="slide bg-gradient" data-bg="dark">
+    <div class="center-content" style="gap: 24px;">
+      <div class="subtitle reveal">Refresher</div>
+      <h2 class="title-large reveal d1" style="max-width: 900px;">
+        EDEN builds <span class="gold">cognitive layers</span> for robots &mdash; memory, personality, and decision-making software.
+      </h2>
+      <div class="accent-line-light reveal d2"></div>
+      <p class="body-text reveal d3" style="text-align: center; opacity: 0.65; max-width: 650px;">
+        We want robots that learn from experience, remember context, and make informed decisions &mdash; not just execute hard-coded commands.
+      </p>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 3: LAST SEMESTER RECAP ============ -->
+  <div class="slide bg-cream" data-bg="light">
+    <div class="split-60-40">
+      <div>
+        <div class="section-label reveal">Last Semester Recap</div>
+        <h2 class="title-medium reveal d1">What we built in Fall 2025</h2>
+        <div class="accent-line reveal d2"></div>
+        <div class="stack reveal d3" style="margin-top: 16px;">
+          <div class="card-light card-accent">
+            <strong>5-Layer Architecture</strong>
+            <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Input, Context Gathering, Cognitive, Planning, and Action layers &mdash; end-to-end pipeline from perception to robot control.</p>
+          </div>
+          <div class="card-light card-accent">
+            <strong>Working Cognitive Layer</strong>
+            <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Short-term memory (Redis), long-term relational memory (Postgres + Vector DB), and personality module.</p>
+          </div>
+          <div class="card-light card-accent">
+            <strong>ROS MCP Action Layer</strong>
+            <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Validated in simulation &mdash; natural language to ROS2 commands via Model Context Protocol.</p>
+          </div>
+        </div>
+      </div>
+      <div class="reveal d4">
+        <div class="stack-tight" style="gap: 16px;">
+          <div style="padding: 20px; background: rgba(0,0,0,0.04); border-radius: 8px;">
+            <div class="subtitle" style="font-size: 11px; margin-bottom: 8px;">Key Decision</div>
+            <p style="font-size: 14px; font-weight: 500;">Pivoted from humanoid to simpler wheeled robots</p>
+            <p style="font-size: 12px; opacity: 0.6; margin-top: 6px;">Software is the core differentiator. Simpler hardware = faster iteration on the cognitive stack.</p>
+          </div>
+          <div style="padding: 20px; background: rgba(0,0,0,0.04); border-radius: 8px;">
+            <div class="subtitle" style="font-size: 11px; margin-bottom: 8px;">Lesson Learned</div>
+            <p style="font-size: 14px; font-weight: 500;">First version was buggy</p>
+            <p style="font-size: 12px; opacity: 0.6; margin-top: 6px;">Architecture was sound but not modular or production-ready. This semester: making every layer work properly.</p>
+          </div>
+          <div style="padding: 20px; background: rgba(0,0,0,0.04); border-radius: 8px;">
+            <div class="subtitle" style="font-size: 11px; margin-bottom: 8px;">What Didn't Work</div>
+            <p style="font-size: 14px; font-weight: 500;">ROS MCP + Cosmos reasoning had issues</p>
+            <p style="font-size: 12px; opacity: 0.6; margin-top: 6px;">Robot couldn't navigate properly. Poor spatial awareness. Needs RL training in simulation.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 4: THIS SEMESTER THEME ============ -->
+  <div class="slide bg-red" data-bg="dark">
+    <div class="center-content" style="gap: 20px;">
+      <div class="subtitle reveal" style="opacity: 0.7;">Spring 2026</div>
+      <h2 class="title-large reveal d1" style="max-width: 800px;">Making the Project Perfect</h2>
+      <div style="width: 60px; height: 3px; background: rgba(255,255,255,0.4); margin: 8px 0;" class="reveal d2"></div>
+      <p class="body-text reveal d3" style="text-align: center; opacity: 0.7; max-width: 600px;">
+        Every layer gets upgraded. Every bug gets fixed. Every system gets tested.
+      </p>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 5: ARCHITECTURE OVERVIEW ============ -->
+  <div class="slide bg-charcoal" data-bg="dark">
+    <div class="section-label reveal" style="color: var(--accent-gold);">Architecture</div>
+    <h2 class="title-medium reveal d1">The 5-Layer Pipeline</h2>
+    <div class="accent-line-light reveal d2"></div>
+
+    <div class="flow-diagram reveal d3" style="margin: 24px 0;">
+      <div class="flow-box badge-input">Input Layer</div>
+      <div class="flow-arrow" style="color: var(--cream);">&rarr;</div>
+      <div class="flow-box badge-context">Context Gathering</div>
+      <div class="flow-arrow" style="color: var(--cream);">&rarr;</div>
+      <div class="flow-box badge-cognitive">Cognitive Layer</div>
+      <div class="flow-arrow" style="color: var(--cream);">&rarr;</div>
+      <div class="flow-box badge-planning">Planning Layer</div>
+      <div class="flow-arrow" style="color: var(--cream);">&rarr;</div>
+      <div class="flow-box badge-action">Action Layer</div>
+    </div>
+
+    <div class="grid-3 reveal d4" style="margin-top: 8px; font-size: 13px;">
+      <div class="card" style="border-top: 3px solid #B5E8F0;">
+        <strong>Input</strong>
+        <p style="opacity: 0.7; margin-top: 6px;">OpenCV + YOLOv11 detection. Flags important frames via WebSocket.</p>
+      </div>
+      <div class="card" style="border-top: 3px solid #F0A6C0;">
+        <strong>Context Gathering</strong>
+        <p style="opacity: 0.7; margin-top: 6px;">VLM reasons about scene meaning, intent, spatial relationships.</p>
+      </div>
+      <div class="card" style="border-top: 3px solid #B5A6F0;">
+        <strong>Cognitive</strong>
+        <p style="opacity: 0.7; margin-top: 6px;">Memory (Redis + Postgres/VectorDB) + Personality module for decisions.</p>
+      </div>
+    </div>
+    <div class="grid-2 reveal d5" style="margin-top: 12px; max-width: 66%; font-size: 13px;">
+      <div class="card" style="border-top: 3px solid #F0C0A6;">
+        <strong>Planning</strong>
+        <p style="opacity: 0.7; margin-top: 6px;">Breaks cognitive decisions into step-by-step executable actions.</p>
+      </div>
+      <div class="card" style="border-top: 3px solid #D4E84D;">
+        <strong>Action</strong>
+        <p style="opacity: 0.7; margin-top: 6px;">ROS2 via MCP. NL commands &rarr; ROS topics/services.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 6: INPUT LAYER IMPROVEMENTS ============ -->
+  <div class="slide bg-cream" data-bg="light">
+    <div class="split">
+      <div>
+        <div class="section-label reveal">Layer 1</div>
+        <h2 class="title-medium reveal d1">Input Layer<br>Improvements</h2>
+        <div class="accent-line reveal d2"></div>
+        <div style="margin-top: 12px;" class="reveal d3">
+          <span class="layer-badge badge-input">Input Layer</span>
+        </div>
+        <p class="body-text reveal d4" style="margin-top: 16px; opacity: 0.6;">
+          Need a smaller, more efficient VLM. Input processing needs optimization for real-time on-device inference.
+        </p>
+      </div>
+      <div class="stack reveal d5" style="gap: 14px;">
+        <div class="card-light card-accent">
+          <strong>VLM Replacement Research</strong>
+          <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Evaluate MobileVLM, nanoLLaVA, TinyLLaVA. Benchmark inference time and accuracy on Jetson. Target: <strong>&lt;200ms per frame</strong>.</p>
+        </div>
+        <div class="card-light card-accent">
+          <strong>Jetson Deployment</strong>
+          <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Set up Jetson in lab running continuously for data collection. Configure automatic restart and error recovery. Target: <strong>90%+ uptime</strong>.</p>
+        </div>
+        <div class="card-light card-accent">
+          <strong>Frame Storage System</strong>
+          <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Purchase SSD for important frame storage. Implement frame importance scoring algorithm. Store high-importance frames locally before SuperMemory integration.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 7: CONTEXT GATHERING LAYER ============ -->
+  <div class="slide bg-charcoal" data-bg="dark">
+    <div class="split">
+      <div>
+        <div class="section-label reveal" style="color: var(--accent-gold);">Layer 2</div>
+        <h2 class="title-medium reveal d1">Context Gathering<br>Upgrades</h2>
+        <div class="accent-line-light reveal d2"></div>
+        <div style="margin-top: 12px;" class="reveal d3">
+          <span class="layer-badge badge-context">Context Gathering</span>
+        </div>
+        <p class="body-text reveal d4" style="margin-top: 16px; opacity: 0.6;">
+          Context data sent to cognitive layer needs better filtering and relevance scoring.
+        </p>
+      </div>
+      <div class="stack reveal d5" style="gap: 14px;">
+        <div class="card">
+          <strong>Enhanced Context Processing</strong>
+          <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Multi-modal context fusion (visual + spatial + temporal). Add relevance scoring. Filter redundant/low-value context.</p>
+        </div>
+        <div class="card">
+          <strong>Environmental Understanding</strong>
+          <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Build spatial map of Turtle Lab. Track object locations and states. Scene understanding similar to NVIDIA/Tesla approaches.</p>
+        </div>
+        <div class="card">
+          <strong>Context Prioritization</strong>
+          <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Importance weighting system. Prioritize context relevant to current task. Summarize context for efficiency.</p>
+        </div>
+        <div style="display: flex; gap: 12px; margin-top: 4px;">
+          <div class="metric-box card" style="flex: 1;">
+            <div class="metric-value gold">50%</div>
+            <div class="metric-label">less irrelevant context</div>
+          </div>
+          <div class="metric-box card" style="flex: 1;">
+            <div class="metric-value gold">&gt;0.8</div>
+            <div class="metric-label">relevance score target</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 8: COGNITIVE LAYER - MEMORY ============ -->
+  <div class="slide bg-soft" data-bg="light">
+    <div class="split-60-40">
+      <div>
+        <div class="section-label reveal">Layer 3 &mdash; Memory</div>
+        <h2 class="title-medium reveal d1">Cognitive Layer:<br>Memory System</h2>
+        <div class="accent-line reveal d2"></div>
+        <div style="margin-top: 12px;" class="reveal d3">
+          <span class="layer-badge badge-cognitive">Cognitive Layer</span>
+        </div>
+
+        <div class="grid-2 reveal d4" style="margin-top: 20px;">
+          <div class="card-light card-accent">
+            <strong>SuperMemory Integration</strong>
+            <p style="font-size: 12px; opacity: 0.6; margin-top: 4px;">Native package, knowledge graph visualization, optimized API calls, local caching layer.</p>
+          </div>
+          <div class="card-light card-accent">
+            <strong>Memory Decay &amp; Consolidation</strong>
+            <p style="font-size: 12px; opacity: 0.6; margin-top: 4px;">Short-term &rarr; Long-term pipeline. Forgetting curve for low-importance memories. Strengthen through repetition.</p>
+          </div>
+        </div>
+      </div>
+      <div class="reveal d5">
+        <div class="card-light" style="padding: 24px; margin-bottom: 16px;">
+          <div class="subtitle" style="font-size: 11px; margin-bottom: 12px;">4 Types of Memory</div>
+          <div class="stack-tight" style="gap: 10px;">
+            <div style="font-size: 14px;"><strong style="color: var(--deep-red);">Episodic</strong> &mdash; specific events<br><span style="font-size: 12px; opacity: 0.5;">"Ian left a can on the table"</span></div>
+            <div style="font-size: 14px;"><strong style="color: var(--deep-red);">Semantic</strong> &mdash; facts &amp; rules<br><span style="font-size: 12px; opacity: 0.5;">"Lab rule: no food on tables"</span></div>
+            <div style="font-size: 14px;"><strong style="color: var(--deep-red);">Procedural</strong> &mdash; how-to knowledge<br><span style="font-size: 12px; opacity: 0.5;">"How to clean up spills"</span></div>
+            <div style="font-size: 14px;"><strong style="color: var(--deep-red);">Social</strong> &mdash; relationships<br><span style="font-size: 12px; opacity: 0.5;">"Ian is sometimes careless"</span></div>
+          </div>
+        </div>
+        <div class="card-light" style="padding: 16px;">
+          <div class="subtitle" style="font-size: 10px; margin-bottom: 8px;">Importance Score Function</div>
+          <div class="code-block" style="font-size: 11px; padding: 12px; background: #1a1a2e;">
+<span class="key">Importance</span> = f(
+  <span class="str">Relevance to function</span>,
+  <span class="str">Social relationship impact</span>,
+  <span class="str">Rule/safety implications</span>,
+  <span class="str">Frequency</span>, <span class="str">Recency</span>,
+  <span class="str">Emotional valence</span>
+)
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 9: COGNITIVE LAYER - PERSONALITY ============ -->
+  <div class="slide bg-cream" data-bg="light">
+    <div class="split">
+      <div>
+        <div class="section-label reveal">Layer 3 &mdash; Personality</div>
+        <h2 class="title-medium reveal d1">Cognitive Layer:<br>Personality &amp; Social</h2>
+        <div class="accent-line reveal d2"></div>
+        <div class="stack reveal d3" style="margin-top: 16px; gap: 14px;">
+          <div class="card-light card-accent">
+            <strong>Personality Development</strong>
+            <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Define core traits (helpful, careful, rule-conscious). Trait-based response modification. Consistency checking.</p>
+          </div>
+          <div class="card-light card-accent">
+            <strong>Relationship Tracking</strong>
+            <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Track interaction history per person. Build trust/reliability scores. Adjust behavior based on past interactions.</p>
+          </div>
+          <div class="card-light card-accent">
+            <strong>Physical Feasibility Checking</strong>
+            <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Validate if cognitive decisions are physically possible. Spatial reasoning about object affordances. Predict outcomes before execution.</p>
+          </div>
+        </div>
+      </div>
+      <div class="reveal d4">
+        <div class="card-light" style="padding: 24px; border: 2px solid rgba(194,59,34,0.15);">
+          <div class="subtitle" style="font-size: 11px; margin-bottom: 12px;">New: Discord Bot Integration</div>
+          <p style="font-size: 15px; font-weight: 500; margin-bottom: 12px;">Social learning in a lower-stakes environment</p>
+          <ul class="clean" style="font-size: 13px;">
+            <li>Create Discord bot for EDEN</li>
+            <li>Text-based conversations with team members</li>
+            <li>Log interactions and build relationships</li>
+            <li>Extract social dynamics and preferences</li>
+            <li>Test personality responses before hardware deployment</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 10: PLANNING LAYER ============ -->
+  <div class="slide bg-charcoal" data-bg="dark">
+    <div class="split">
+      <div>
+        <div class="section-label reveal" style="color: var(--accent-gold);">Layer 4</div>
+        <h2 class="title-medium reveal d1">Planning Layer<br>Enhancements</h2>
+        <div class="accent-line-light reveal d2"></div>
+        <div style="margin-top: 12px;" class="reveal d3">
+          <span class="layer-badge badge-planning">Planning Layer</span>
+        </div>
+        <p class="body-text reveal d4" style="margin-top: 16px; opacity: 0.6;">
+          Cosmos reasoning not working properly. Need proper output format, accuracy, and multi-step task decomposition.
+        </p>
+      </div>
+      <div class="stack reveal d5" style="gap: 14px;">
+        <div class="card">
+          <strong>Cosmos Reasoning Fix</strong>
+          <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Debug current implementation. Fix input/output format. Test with simple scenarios first, then scale up.</p>
+        </div>
+        <div class="card">
+          <strong>Alternative LLM Integration</strong>
+          <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Try NVIDIA Nemotron (free API). Benchmark against Ollama models. Focus on agentic AI capabilities and reasoning quality.</p>
+        </div>
+        <div class="card">
+          <strong>Planning Algorithm Upgrade</strong>
+          <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Multi-step task decomposition. Error recovery and replanning. Validate plans against physical constraints.</p>
+        </div>
+        <div style="display: flex; gap: 12px; margin-top: 4px;">
+          <div class="metric-box card" style="flex: 1;">
+            <div class="metric-value gold">90%+</div>
+            <div class="metric-label">valid task plans</div>
+          </div>
+          <div class="metric-box card" style="flex: 1;">
+            <div class="metric-value gold">&checkmark;</div>
+            <div class="metric-label">error recovery</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 11: ACTION LAYER & ROS-MCP ============ -->
+  <div class="slide bg-cream" data-bg="light">
+    <div class="split">
+      <div>
+        <div class="section-label reveal">Layer 5</div>
+        <h2 class="title-medium reveal d1">Action Layer<br>&amp; ROS-MCP</h2>
+        <div class="accent-line reveal d2"></div>
+        <div style="margin-top: 12px;" class="reveal d3">
+          <span class="layer-badge badge-action">Action Layer</span>
+        </div>
+        <p class="body-text reveal d4" style="margin-top: 16px; opacity: 0.6;">
+          Robot can't navigate properly in simulation. Doesn't understand environment or obstacles. Poor spatial awareness.
+        </p>
+        <div style="display: flex; gap: 12px; margin-top: 20px;" class="reveal d5">
+          <div class="metric-box card-light" style="flex: 1; border: 1px solid rgba(0,0,0,0.08);">
+            <div class="metric-value red">&lt;5%</div>
+            <div class="metric-label">collision rate target</div>
+          </div>
+          <div class="metric-box card-light" style="flex: 1; border: 1px solid rgba(0,0,0,0.08);">
+            <div class="metric-value red">Sim&rarr;Real</div>
+            <div class="metric-label">transfer learning</div>
+          </div>
+        </div>
+      </div>
+      <div class="stack reveal d6" style="gap: 14px;">
+        <div class="card-light card-accent">
+          <strong>Isaac Sim Digital Twin</strong>
+          <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Create accurate 3D model of Turtle Lab. Import into NVIDIA Isaac Sim with all furniture, equipment, and boundaries. Match real-world dimensions.</p>
+        </div>
+        <div class="card-light card-accent">
+          <strong>Reinforcement Learning Training</strong>
+          <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Train navigation policies in Isaac Sim. Obstacle avoidance, path planning, tool usage and manipulation. Transfer to real robot.</p>
+        </div>
+        <div class="card-light card-accent">
+          <strong>Imitation Learning (IL)</strong>
+          <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Record expert demonstrations. Train on basic tasks (pick up, navigate). Combine with RL for robust behaviors.</p>
+        </div>
+        <div class="card-light card-accent">
+          <strong>ROS-MCP Improvements</strong>
+          <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Better environment mapping and localization. Dynamic obstacle avoidance. Test extensively in simulation before hardware.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 12: HARDWARE ROADMAP ============ -->
+  <div class="slide bg-charcoal" data-bg="dark">
+    <div class="split">
+      <div>
+        <div class="section-label reveal" style="color: var(--accent-gold);">Hardware</div>
+        <h2 class="title-medium reveal d1">Hardware<br>Roadmap</h2>
+        <div class="accent-line-light reveal d2"></div>
+        <div class="stack reveal d3" style="margin-top: 16px; gap: 14px;">
+          <div class="card">
+            <strong>Physical Testing Environment</strong>
+            <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Dedicated test table with objects. Controlled "mini-lab" environment. Cameras for observation. Markers for localization.</p>
+          </div>
+          <div class="card">
+            <strong>Simple Custom Robots</strong>
+            <p style="font-size: 13px; opacity: 0.7; margin-top: 4px;">Simple mobile base or arm. Affordable, rapid deployment. 3D printed components. Off-the-shelf motors and sensors.</p>
+          </div>
+        </div>
+      </div>
+      <div class="reveal d4">
+        <div class="card" style="padding: 24px; margin-bottom: 16px; border: 1px solid rgba(212,168,67,0.2);">
+          <div class="subtitle" style="font-size: 11px; margin-bottom: 12px; color: var(--accent-gold);">With More Funding</div>
+          <ul class="clean" style="font-size: 14px;">
+            <li>Orin boards for better compute</li>
+            <li>Mini humanoid robots for faster deployment</li>
+            <li>Multiple robots for swarm behaviors</li>
+          </ul>
+        </div>
+        <div class="card" style="padding: 24px;">
+          <div class="subtitle" style="font-size: 11px; margin-bottom: 12px;">Lab Integration Vision</div>
+          <ul class="clean" style="font-size: 14px;">
+            <li>Multiple stationary and mobile robots</li>
+            <li>Distributed sensing and actuation</li>
+            <li>Persistent memory across robot fleet</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 13: MEMORY GENERATION & PERSONALITY ============ -->
+  <div class="slide bg-warm" data-bg="light">
+    <div class="split-60-40">
+      <div>
+        <div class="section-label reveal">Core Focus</div>
+        <h2 class="title-medium reveal d1">Memory Generation &amp;<br>Personality Development</h2>
+        <div class="accent-line reveal d2"></div>
+        <div class="stack reveal d3" style="margin-top: 16px; gap: 14px;">
+          <div class="card-light card-accent">
+            <strong>Active Memory Creation</strong>
+            <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Don't wait for perfect SuperMemory integration. Store important frames and events locally. Process and upload in batches when ready.</p>
+          </div>
+          <div class="card-light card-accent">
+            <strong>Multi-Channel Interaction</strong>
+            <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Discord bot for text conversations. Jetson camera for visual observations. Build comprehensive interaction history.</p>
+          </div>
+          <div class="card-light card-accent">
+            <strong>Relationship Building</strong>
+            <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Track individual team members. Learn preferences, habits, reliability. Build trust scores. Adjust behavior accordingly.</p>
+          </div>
+        </div>
+      </div>
+      <div class="reveal d4">
+        <div class="card-light" style="padding: 20px;">
+          <div class="subtitle" style="font-size: 10px; margin-bottom: 12px;">Memory Pipeline</div>
+          <div class="stack-tight" style="gap: 6px;">
+            <div style="padding: 8px 12px; background: #B5E8F0; border-radius: 6px; font-size: 12px; font-weight: 600; color: #1a3a3f;">Input (Vision / Text)</div>
+            <div style="text-align: center; opacity: 0.3;">&darr;</div>
+            <div style="padding: 8px 12px; background: #F0A6C0; border-radius: 6px; font-size: 12px; font-weight: 600; color: #3f1a2a;">Frame Classification</div>
+            <div style="text-align: center; opacity: 0.3;">&darr;</div>
+            <div style="padding: 8px 12px; background: #F0C0A6; border-radius: 6px; font-size: 12px; font-weight: 600; color: #3f2a1a;">Importance Scoring</div>
+            <div style="text-align: center; opacity: 0.3;">&darr;</div>
+            <div style="padding: 8px 12px; background: rgba(0,0,0,0.06); border-radius: 6px; font-size: 12px; font-weight: 600;">Local Storage (SSD)</div>
+            <div style="text-align: center; opacity: 0.3;">&darr;</div>
+            <div style="padding: 8px 12px; background: #B5A6F0; border-radius: 6px; font-size: 12px; font-weight: 600; color: #1a1a3f;">Memory Extraction</div>
+            <div style="text-align: center; opacity: 0.3;">&darr;</div>
+            <div style="padding: 8px 12px; background: #D4E84D; border-radius: 6px; font-size: 12px; font-weight: 600; color: #2a3f1a;">SuperMemory Upload</div>
+            <div style="text-align: center; opacity: 0.3;">&darr;</div>
+            <div style="padding: 8px 12px; background: var(--deep-red); border-radius: 6px; font-size: 12px; font-weight: 600; color: white;">Knowledge Graph</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 14: INFRASTRUCTURE ============ -->
+  <div class="slide bg-cream" data-bg="light">
+    <div class="split">
+      <div>
+        <div class="section-label reveal">Infrastructure</div>
+        <h2 class="title-medium reveal d1">Project<br>Infrastructure</h2>
+        <div class="accent-line reveal d2"></div>
+        <div class="stack reveal d3" style="margin-top: 16px; gap: 14px;">
+          <div class="card-light card-accent">
+            <strong>GitHub Setup</strong>
+            <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Proper modular repository structure. Clear modules per layer. README, issues, project board, contribution guidelines.</p>
+          </div>
+          <div class="card-light card-accent">
+            <strong>EDEN Website</strong>
+            <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Project showcase. Documentation and tutorials. Demo videos. Team information.</p>
+          </div>
+          <div class="card-light card-accent">
+            <strong>Open Source Commitment</strong>
+            <p style="font-size: 13px; opacity: 0.6; margin-top: 4px;">Document all components for community use. Clean, modular architecture. Comprehensive setup guides and example use cases.</p>
+          </div>
+        </div>
+      </div>
+      <div class="reveal d4">
+        <div class="code-block" style="font-size: 13px;">
+<span class="comment">// EDEN Monorepo Structure</span>
+EDEN/
+├── <span class="key">eden-hq/</span>          <span class="comment">// Central coordination</span>
+│   ├── docs/
+│   ├── meeting-notes/
+│   ├── member-todos/
+│   └── ROADMAP.md
+│
+├── <span class="key">eden-core/</span>        <span class="comment">// Shared software libs</span>
+├── <span class="key">eden-hardware-core/</span> <span class="comment">// Shared CAD/electronics</span>
+│
+├── <span class="str">eden-adam-software/</span> <span class="comment">// Adam RL + personality</span>
+├── <span class="str">eden-adam-hardware/</span> <span class="comment">// Adam CAD + PCB</span>
+│
+├── <span class="num">eden-eve-software/</span>  <span class="comment">// Eve RL + personality</span>
+├── <span class="num">eden-eve-hardware/</span>  <span class="comment">// Eve CAD + PCB</span>
+│
+└── <span class="key">eden-research/</span>    <span class="comment">// Papers, outlines</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 15: TEAM ============ -->
+  <div class="slide bg-charcoal" data-bg="dark">
+    <div class="section-label reveal" style="color: var(--accent-gold);">The Team</div>
+    <h2 class="title-medium reveal d1">10 Members, Clear Roles</h2>
+    <div class="accent-line-light reveal d2"></div>
+
+    <div class="member-grid reveal d3" style="margin-top: 24px;">
+      <div class="member-card" style="background: rgba(194,59,34,0.15); border-color: rgba(194,59,34,0.25);">
+        <div class="name">Vedant Soni</div>
+        <div class="role">Project Lead &amp; Research</div>
+      </div>
+      <div class="member-card" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08);">
+        <div class="name">Sebastian Chu</div>
+        <div class="role">Senior AI/Software Lead</div>
+      </div>
+      <div class="member-card" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08);">
+        <div class="name">Andrew Zheng</div>
+        <div class="role">ROS 2 &amp; Isaac Sim</div>
+      </div>
+      <div class="member-card" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08);">
+        <div class="name">Paavan Bagla</div>
+        <div class="role">ROS MCP Server</div>
+      </div>
+      <div class="member-card" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08);">
+        <div class="name">Haren Thorat</div>
+        <div class="role">LLM &amp; Ollama</div>
+      </div>
+      <div class="member-card" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08);">
+        <div class="name">William Lam</div>
+        <div class="role">Hardware &amp; Testing</div>
+      </div>
+      <div class="member-card" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08);">
+        <div class="name">Sebastian Dayer</div>
+        <div class="role">Hardware &amp; Docs</div>
+      </div>
+      <div class="member-card" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08);">
+        <div class="name">Dillon Markentell</div>
+        <div class="role">Hardware &amp; Testing</div>
+      </div>
+      <div class="member-card" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08);">
+        <div class="name">Juan Gomez Sandoval</div>
+        <div class="role">Hardware &amp; Integration</div>
+      </div>
+      <div class="member-card" style="background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.08);">
+        <div class="name">Krish Singh</div>
+        <div class="role">Software &amp; Docs</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 16: SUCCESS METRICS ============ -->
+  <div class="slide bg-gradient" data-bg="dark">
+    <div class="section-label reveal" style="color: var(--accent-gold);">Targets</div>
+    <h2 class="title-medium reveal d1">Success Metrics</h2>
+    <div class="accent-line-light reveal d2"></div>
+
+    <div class="grid-3 reveal d3" style="margin-top: 24px;">
+      <div class="card" style="text-align: center; padding: 28px;">
+        <div style="font-size: 14px; opacity: 0.5; margin-bottom: 8px;">Input Layer</div>
+        <div class="metric-value gold" style="font-size: 36px;">&lt;200ms</div>
+        <div class="metric-label" style="margin-top: 8px;">VLM inference per frame</div>
+        <div style="margin-top: 12px; font-size: 12px; opacity: 0.5;">90%+ Jetson uptime</div>
+      </div>
+      <div class="card" style="text-align: center; padding: 28px;">
+        <div style="font-size: 14px; opacity: 0.5; margin-bottom: 8px;">Context Layer</div>
+        <div class="metric-value gold" style="font-size: 36px;">50%</div>
+        <div class="metric-label" style="margin-top: 8px;">reduction in irrelevant context</div>
+        <div style="margin-top: 12px; font-size: 12px; opacity: 0.5;">Relevance score &gt;0.8</div>
+      </div>
+      <div class="card" style="text-align: center; padding: 28px;">
+        <div style="font-size: 14px; opacity: 0.5; margin-bottom: 8px;">Planning Layer</div>
+        <div class="metric-value gold" style="font-size: 36px;">90%+</div>
+        <div class="metric-label" style="margin-top: 8px;">valid task plans generated</div>
+        <div style="margin-top: 12px; font-size: 12px; opacity: 0.5;">Error recovery built in</div>
+      </div>
+    </div>
+    <div class="grid-2 reveal d4" style="margin-top: 16px; max-width: 66%;">
+      <div class="card" style="text-align: center; padding: 28px;">
+        <div style="font-size: 14px; opacity: 0.5; margin-bottom: 8px;">Action Layer</div>
+        <div class="metric-value gold" style="font-size: 36px;">&lt;5%</div>
+        <div class="metric-label" style="margin-top: 8px;">collision rate in simulation</div>
+        <div style="margin-top: 12px; font-size: 12px; opacity: 0.5;">Smooth sim-to-real transfer</div>
+      </div>
+      <div class="card" style="text-align: center; padding: 28px;">
+        <div style="font-size: 14px; opacity: 0.5; margin-bottom: 8px;">Memory System</div>
+        <div class="metric-value gold" style="font-size: 36px;">4 Types</div>
+        <div class="metric-label" style="margin-top: 8px;">classified memory system</div>
+        <div style="margin-top: 12px; font-size: 12px; opacity: 0.5;">Episodic + Semantic + Procedural + Social</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 17: END GOAL ============ -->
+  <div class="slide bg-dark" data-bg="dark">
+    <div class="center-content" style="gap: 24px;">
+      <div class="subtitle reveal" style="opacity: 0.5;">End of Semester Goal</div>
+      <h2 class="title-large reveal d1" style="max-width: 900px;">
+        Robots that <span class="gold">remember</span>, <span class="gold">reason</span>,<br>and <span class="gold">learn</span> from experience.
+      </h2>
+      <div class="accent-line-light reveal d2"></div>
+      <p class="body-text reveal d3" style="text-align: center; opacity: 0.55; max-width: 600px;">
+        Every layer optimized. Every memory classified. Every decision validated against physical reality. Open sourced for everyone.
+      </p>
+    </div>
+  </div>
+
+  <!-- ============ SLIDE 18: THANK YOU ============ -->
+  <div class="slide bg-cream" data-bg="light">
+    <div class="center-content" style="gap: 16px;">
+      <h1 class="title-huge reveal">Thank You</h1>
+      <div class="accent-line reveal d1" style="margin: 8px auto;"></div>
+      <p class="body-text reveal d2" style="text-align: center; opacity: 0.5;">
+        Questions?
+      </p>
+      <div class="reveal d3" style="margin-top: 32px; display: flex; gap: 32px; opacity: 0.4; font-size: 13px;">
+        <span>eden-robotics.github.io/Eden</span>
+        <span>TURTLE Lab &bull; Texas A&M</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- NAV DOTS -->
+<div class="nav-dots" id="navDots"></div>
+
+<!-- SLIDE COUNTER -->
+<div class="slide-counter" id="counter"></div>
+
+<script>
+(function() {
+  const slides = document.querySelectorAll('.slide');
+  const progress = document.getElementById('progress');
+  const counter = document.getElementById('counter');
+  const navDotsContainer = document.getElementById('navDots');
+  const dateLabel = document.getElementById('dateLabel');
+  let current = 0;
+  let isTransitioning = false;
+
+  slides.forEach((_, i) => {
+    const dot = document.createElement('button');
+    dot.className = 'nav-dot' + (i === 0 ? ' active' : '');
+    dot.addEventListener('click', () => goTo(i));
+    navDotsContainer.appendChild(dot);
+  });
+
+  function updateUI() {
+    const pct = ((current + 1) / slides.length) * 100;
+    progress.style.width = pct + '%';
+    counter.textContent = (current + 1) + ' / ' + slides.length;
+
+    const bg = slides[current].dataset.bg;
+    const color = bg === 'dark' ? 'var(--cream)' : 'var(--charcoal)';
+    counter.style.color = color;
+    dateLabel.style.color = color;
+    progress.style.background = bg === 'dark' ? 'var(--accent-gold)' : 'var(--deep-red)';
+
+    const dots = navDotsContainer.querySelectorAll('.nav-dot');
+    dots.forEach((d, i) => {
+      d.classList.toggle('active', i === current);
+      d.style.background = i === current
+        ? (bg === 'dark' ? 'var(--accent-gold)' : 'var(--deep-red)')
+        : (bg === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)');
+    });
+  }
+
+  function goTo(index) {
+    if (index === current || isTransitioning || index < 0 || index >= slides.length) return;
+    isTransitioning = true;
+
+    slides[current].classList.remove('active');
+    slides[current].classList.add('exit');
+
+    setTimeout(() => {
+      slides[current].classList.remove('exit');
+      current = index;
+      slides[current].classList.add('active');
+      updateUI();
+      setTimeout(() => { isTransitioning = false; }, 400);
+    }, 300);
+  }
+
+  function next() { goTo(current + 1); }
+  function prev() { goTo(current - 1); }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); prev(); }
+    if (e.key === 'Home') { e.preventDefault(); goTo(0); }
+    if (e.key === 'End') { e.preventDefault(); goTo(slides.length - 1); }
+  });
+
+  let wheelTimeout;
+  document.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    clearTimeout(wheelTimeout);
+    wheelTimeout = setTimeout(() => {
+      if (e.deltaY > 0) next();
+      else prev();
+    }, 50);
+  }, { passive: false });
+
+  let touchStartY = 0;
+  document.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].clientY; });
+  document.addEventListener('touchend', (e) => {
+    const diff = touchStartY - e.changedTouches[0].clientY;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) next();
+      else prev();
+    }
+  });
+
+  updateUI();
+})();
+</script>
+
+</body>
+</html>
