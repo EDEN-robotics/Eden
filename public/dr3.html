@@ -5,20 +5,23 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EDEN Design Review 3</title>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
 
   :root {
-    --cream: #F5F0E8;
-    --warm-white: #FAF7F2;
-    --deep-red: #C23B22;
-    --dark-red: #8B1A1A;
-    --charcoal: #2C2C2C;
-    --warm-gray: #6B6560;
-    --light-gray: #B8B0A6;
-    --accent-gold: #D4A843;
-    --soft-green: #4A7C59;
-    --deep-purple: #6B5B95;
-    --ink: #1A1A1A;
+    --deep-bg: #0a0f1c;
+    --dark-surface: #111827;
+    --cool-white: #f0f2f5;
+    --light-surface: #e8ecf1;
+    --primary: #00d4ff;
+    --primary-dim: #0ea5e9;
+    --secondary: #f59e0b;
+    --warm-accent: #ff6b35;
+    --charcoal: #1e293b;
+    --warm-gray: #94a3b8;
+    --light-gray: #cbd5e1;
+    --soft-green: #34d399;
+    --deep-purple: #8b5cf6;
+    --ink: #0a0f1c;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -27,7 +30,20 @@
     width: 100%; height: 100%;
     overflow: hidden;
     background: var(--ink);
-    font-family: 'Inter', -apple-system, sans-serif;
+    font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+  }
+
+  /* Noise/grain texture overlay */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 256px 256px;
   }
 
   .slide-deck {
@@ -43,48 +59,48 @@
     justify-content: center;
     padding: 60px 80px;
     opacity: 0;
-    transform: translateY(30px);
-    transition: opacity 0.6s ease, transform 0.6s ease;
+    transform: translateY(20px) scale(0.98);
+    transition: opacity 0.7s cubic-bezier(0.4, 0, 0.2, 1), transform 0.7s cubic-bezier(0.4, 0, 0.2, 1);
     pointer-events: none;
     overflow: hidden;
   }
 
   .slide.active {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
     pointer-events: all;
   }
 
   .slide.exit {
     opacity: 0;
-    transform: translateY(-30px);
+    transform: translateY(-20px) scale(1.01);
   }
 
   /* ---- SLIDE BACKGROUNDS ---- */
-  .bg-cream { background: var(--cream); color: var(--charcoal); }
-  .bg-dark { background: var(--ink); color: var(--cream); }
-  .bg-red { background: var(--deep-red); color: var(--warm-white); }
-  .bg-warm { background: #E8DDD0; color: var(--charcoal); }
-  .bg-charcoal { background: var(--charcoal); color: var(--cream); }
+  .bg-cream { background: var(--cool-white); color: var(--charcoal); }
+  .bg-dark { background: var(--ink); color: var(--cool-white); }
+  .bg-red { background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); color: #f0f2f5; }
+  .bg-warm { background: #e2e8f0; color: var(--charcoal); }
+  .bg-charcoal { background: var(--dark-surface); color: var(--cool-white); }
   .bg-gradient {
-    background: linear-gradient(135deg, var(--ink) 0%, #2a1a1a 50%, var(--dark-red) 100%);
-    color: var(--cream);
+    background: linear-gradient(135deg, var(--ink) 0%, #0f172a 50%, #1e1b4b 100%);
+    color: var(--cool-white);
   }
   .bg-soft {
-    background: linear-gradient(180deg, var(--cream) 0%, #E8DDD0 100%);
+    background: linear-gradient(180deg, var(--cool-white) 0%, #e2e8f0 100%);
     color: var(--charcoal);
   }
 
   /* ---- TYPOGRAPHY ---- */
   h1, h2, h3 {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'Sora', sans-serif;
     line-height: 1.1;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.03em;
   }
 
   .title-huge {
     font-size: clamp(56px, 8vw, 130px);
-    font-weight: 900;
+    font-weight: 800;
   }
 
   .title-large {
@@ -98,16 +114,16 @@
   }
 
   .subtitle {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: clamp(18px, 1.6vw, 26px);
-    font-weight: 300;
-    letter-spacing: 0.04em;
+    font-weight: 400;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     opacity: 0.7;
   }
 
   .body-text {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: clamp(18px, 1.5vw, 24px);
     line-height: 1.7;
     font-weight: 400;
@@ -117,19 +133,21 @@
   .accent-line {
     width: 60px;
     height: 3px;
-    background: var(--deep-red);
+    background: var(--primary);
     margin: 20px 0;
+    border-radius: 2px;
   }
 
   .accent-line-light {
     width: 60px;
     height: 3px;
-    background: var(--accent-gold);
+    background: var(--secondary);
     margin: 20px 0;
+    border-radius: 2px;
   }
 
   .section-label {
-    font-family: 'Inter', sans-serif;
+    font-family: 'Sora', sans-serif;
     font-size: 18px;
     font-weight: 600;
     letter-spacing: 0.15em;
@@ -138,10 +156,17 @@
     margin-bottom: 24px;
   }
 
-  .red { color: var(--deep-red); }
-  .gold { color: var(--accent-gold); }
+  .red { color: var(--primary); }
+  .gold { color: var(--secondary); }
   .green { color: var(--soft-green); }
   .muted { opacity: 0.6; }
+
+  /* Gradient glow behind titles on dark slides */
+  .bg-dark h1, .bg-dark h2,
+  .bg-gradient h1, .bg-gradient h2,
+  .bg-charcoal h1, .bg-charcoal h2 {
+    text-shadow: 0 0 80px rgba(0, 212, 255, 0.15), 0 0 40px rgba(0, 212, 255, 0.08);
+  }
 
   /* ---- LAYOUTS ---- */
   .split {
@@ -183,41 +208,56 @@
 
   /* ---- COMPONENTS ---- */
   .card {
-    background: rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.05);
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 12px;
+    border-radius: 16px;
     padding: 28px;
-    backdrop-filter: blur(8px);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), 0 1px 4px rgba(0, 0, 0, 0.1);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .card:hover {
+    border-color: rgba(0, 212, 255, 0.2);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2), 0 0 20px rgba(0, 212, 255, 0.06);
   }
 
   .card-light {
     background: rgba(0,0,0,0.03);
     border: 1px solid rgba(0,0,0,0.06);
-    border-radius: 12px;
+    border-radius: 16px;
     padding: 28px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.03);
+    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+  }
+
+  .card-light:hover {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
+    border-color: rgba(14, 165, 233, 0.15);
   }
 
   .card-accent {
-    border-left: 3px solid var(--deep-red);
+    border-left: 3px solid var(--primary);
     padding-left: 20px;
   }
 
   .tag {
     display: inline-block;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: 18px;
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     padding: 4px 12px;
-    border-radius: 4px;
-    background: rgba(194, 59, 34, 0.12);
-    color: var(--deep-red);
+    border-radius: 6px;
+    background: rgba(0, 212, 255, 0.1);
+    color: var(--primary);
   }
 
   .tag-dark {
     background: rgba(255,255,255,0.1);
-    color: var(--cream);
+    color: var(--cool-white);
   }
 
   .layer-badge {
@@ -225,17 +265,17 @@
     align-items: center;
     gap: 8px;
     padding: 12px 20px;
-    border-radius: 10px;
-    font-family: 'Inter', sans-serif;
+    border-radius: 12px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: 18px;
     font-weight: 600;
   }
 
-  .badge-input { background: #B5E8F0; color: #1a3a3f; }
-  .badge-context { background: #F0A6C0; color: #3f1a2a; }
-  .badge-cognitive { background: #B5A6F0; color: #1a1a3f; }
-  .badge-planning { background: #F0C0A6; color: #3f2a1a; }
-  .badge-action { background: #D4E84D; color: #2a3f1a; }
+  .badge-input { background: #67e8f9; color: #083344; }
+  .badge-context { background: #f472b6; color: #3b0a2a; }
+  .badge-cognitive { background: #a78bfa; color: #1e1048; }
+  .badge-planning { background: #fb923c; color: #431a04; }
+  .badge-action { background: #a3e635; color: #1a2e05; }
 
   .grid-2 {
     display: grid;
@@ -253,7 +293,7 @@
     position: relative;
     padding-left: 24px;
     padding-bottom: 20px;
-    border-left: 2px solid rgba(194, 59, 34, 0.25);
+    border-left: 2px solid rgba(0, 212, 255, 0.25);
   }
 
   .timeline-item::before {
@@ -264,7 +304,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--deep-red);
+    background: var(--primary);
   }
 
   .timeline-item.done::before {
@@ -272,8 +312,8 @@
   }
 
   .timeline-item.active::before {
-    background: var(--accent-gold);
-    box-shadow: 0 0 0 4px rgba(212, 168, 67, 0.25);
+    background: var(--secondary);
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.25);
   }
 
   .flow-diagram {
@@ -286,8 +326,8 @@
 
   .flow-box {
     padding: 16px 24px;
-    border-radius: 10px;
-    font-family: 'Inter', sans-serif;
+    border-radius: 12px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: 18px;
     font-weight: 600;
     text-align: center;
@@ -300,9 +340,9 @@
   }
 
   .number-big {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'Sora', sans-serif;
     font-size: clamp(48px, 5vw, 80px);
-    font-weight: 900;
+    font-weight: 800;
     line-height: 1;
   }
 
@@ -316,7 +356,7 @@
   .member-card {
     text-align: center;
     padding: 16px 8px;
-    border-radius: 8px;
+    border-radius: 12px;
     background: rgba(0,0,0,0.03);
     border: 1px solid rgba(0,0,0,0.05);
   }
@@ -336,29 +376,30 @@
   .code-block {
     font-family: 'JetBrains Mono', monospace;
     font-size: 16px;
-    background: #1a1a2e;
-    color: #e0e0e0;
+    background: #0f172a;
+    color: #e2e8f0;
     padding: 20px;
-    border-radius: 8px;
+    border-radius: 12px;
     line-height: 1.6;
     overflow-x: auto;
+    border: 1px solid rgba(0, 212, 255, 0.1);
   }
 
-  .code-block .key { color: #82AAFF; }
-  .code-block .str { color: #C3E88D; }
-  .code-block .num { color: #F78C6C; }
-  .code-block .comment { color: #546E7A; }
+  .code-block .key { color: #67e8f9; }
+  .code-block .str { color: #a3e635; }
+  .code-block .num { color: #fb923c; }
+  .code-block .comment { color: #475569; }
 
   /* ---- ANIMATIONS ---- */
   .reveal {
     opacity: 0;
-    transform: translateY(20px);
-    transition: opacity 0.5s ease, transform 0.5s ease;
+    transform: translateY(16px) scale(0.98);
+    transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .slide.active .reveal {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 
   .slide.active .reveal.d1 { transition-delay: 0.1s; }
@@ -375,10 +416,11 @@
     position: fixed;
     top: 0;
     left: 0;
-    height: 3px;
-    background: var(--deep-red);
+    height: 4px;
+    background: var(--primary);
     transition: width 0.4s ease;
     z-index: 100;
+    box-shadow: 0 0 12px rgba(0, 212, 255, 0.5), 0 0 4px rgba(0, 212, 255, 0.3);
   }
 
   /* ---- NAV DOTS ---- */
@@ -389,13 +431,13 @@
     transform: translateY(-50%);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     z-index: 100;
   }
 
   .nav-dot {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
     background: rgba(255,255,255,0.2);
     cursor: pointer;
@@ -405,8 +447,9 @@
   }
 
   .nav-dot.active {
-    background: var(--deep-red);
-    transform: scale(1.4);
+    background: var(--primary);
+    transform: scale(1.5);
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.5), 0 0 4px rgba(0, 212, 255, 0.3);
   }
 
   /* ---- SLIDE COUNTER ---- */
@@ -425,7 +468,7 @@
     position: fixed;
     top: 24px;
     right: 32px;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: 18px;
     font-weight: 500;
     letter-spacing: 0.08em;
@@ -453,7 +496,7 @@
     position: relative;
     padding-left: 20px;
     margin-bottom: 10px;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: clamp(16px, 1.3vw, 20px);
     line-height: 1.6;
   }
@@ -466,18 +509,18 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--deep-red);
+    background: var(--primary);
   }
 
   .bg-dark ul.clean li::before,
   .bg-gradient ul.clean li::before,
   .bg-charcoal ul.clean li::before {
-    background: var(--accent-gold);
+    background: var(--secondary);
   }
 
   ol.styled {
     padding-left: 24px;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Plus Jakarta Sans', sans-serif;
     font-size: clamp(13px, 1.1vw, 17px);
     line-height: 1.8;
   }
@@ -490,12 +533,12 @@
   .metric-box {
     text-align: center;
     padding: 16px;
-    border-radius: 8px;
+    border-radius: 12px;
   }
   .metric-value {
-    font-family: 'Playfair Display', Georgia, serif;
+    font-family: 'Sora', sans-serif;
     font-size: 36px;
-    font-weight: 900;
+    font-weight: 800;
     line-height: 1.2;
   }
   .metric-label {
@@ -565,17 +608,17 @@
       </div>
       <div class="reveal d4">
         <div class="stack-tight" style="gap: 16px;">
-          <div style="padding: 20px; background: rgba(0,0,0,0.04); border-radius: 8px;">
+          <div style="padding: 20px; background: rgba(0,0,0,0.04); border-radius: 12px;">
             <div class="subtitle" style="font-size: 18px; margin-bottom: 8px;">Key Decision</div>
             <p style="font-size: 18px; font-weight: 500;">Pivoted from humanoid to simpler wheeled robots</p>
             <p style="font-size: 18px; opacity: 0.6; margin-top: 6px;">Software is the core differentiator. Simpler hardware = faster iteration on the cognitive stack.</p>
           </div>
-          <div style="padding: 20px; background: rgba(0,0,0,0.04); border-radius: 8px;">
+          <div style="padding: 20px; background: rgba(0,0,0,0.04); border-radius: 12px;">
             <div class="subtitle" style="font-size: 18px; margin-bottom: 8px;">Lesson Learned</div>
             <p style="font-size: 18px; font-weight: 500;">First version was buggy</p>
             <p style="font-size: 18px; opacity: 0.6; margin-top: 6px;">Architecture was sound but not modular or production-ready. This semester: making every layer work properly.</p>
           </div>
-          <div style="padding: 20px; background: rgba(0,0,0,0.04); border-radius: 8px;">
+          <div style="padding: 20px; background: rgba(0,0,0,0.04); border-radius: 12px;">
             <div class="subtitle" style="font-size: 18px; margin-bottom: 8px;">What Didn't Work</div>
             <p style="font-size: 18px; font-weight: 500;">ROS MCP + Cosmos reasoning had issues</p>
             <p style="font-size: 18px; opacity: 0.6; margin-top: 6px;">Robot couldn't navigate properly. Poor spatial awareness. Needs RL training in simulation.</p>
@@ -590,7 +633,7 @@
     <div class="center-content" style="gap: 20px;">
       <div class="subtitle reveal" style="opacity: 0.7;">Spring 2026</div>
       <h2 class="title-large reveal d1" style="max-width: 800px;">Making the Project Perfect</h2>
-      <div style="width: 60px; height: 3px; background: rgba(255,255,255,0.4); margin: 8px 0;" class="reveal d2"></div>
+      <div style="width: 60px; height: 3px; background: rgba(255,255,255,0.4); margin: 8px 0; border-radius: 2px;" class="reveal d2"></div>
       <p class="body-text reveal d3" style="text-align: center; opacity: 0.7; max-width: 600px;">
         Every layer gets upgraded. Every bug gets fixed. Every system gets tested.
       </p>
@@ -599,42 +642,42 @@
 
   <!-- ============ SLIDE 5: ARCHITECTURE OVERVIEW ============ -->
   <div class="slide bg-charcoal" data-bg="dark">
-    <div class="section-label reveal" style="color: var(--accent-gold);">Architecture</div>
+    <div class="section-label reveal" style="color: var(--secondary);">Architecture</div>
     <h2 class="title-medium reveal d1">The 5-Layer Pipeline</h2>
     <div class="accent-line-light reveal d2"></div>
 
     <div class="flow-diagram reveal d3" style="margin: 24px 0;">
       <div class="flow-box badge-input">Input Layer</div>
-      <div class="flow-arrow" style="color: var(--cream);">&rarr;</div>
+      <div class="flow-arrow" style="color: var(--cool-white);">&rarr;</div>
       <div class="flow-box badge-context">Context Gathering</div>
-      <div class="flow-arrow" style="color: var(--cream);">&rarr;</div>
+      <div class="flow-arrow" style="color: var(--cool-white);">&rarr;</div>
       <div class="flow-box badge-cognitive">Cognitive Layer</div>
-      <div class="flow-arrow" style="color: var(--cream);">&rarr;</div>
+      <div class="flow-arrow" style="color: var(--cool-white);">&rarr;</div>
       <div class="flow-box badge-planning">Planning Layer</div>
-      <div class="flow-arrow" style="color: var(--cream);">&rarr;</div>
+      <div class="flow-arrow" style="color: var(--cool-white);">&rarr;</div>
       <div class="flow-box badge-action">Action Layer</div>
     </div>
 
     <div class="grid-3 reveal d4" style="margin-top: 8px; font-size: 18px;">
-      <div class="card" style="border-top: 3px solid #B5E8F0;">
+      <div class="card" style="border-top: 3px solid #67e8f9;">
         <strong>Input</strong>
         <p style="opacity: 0.7; margin-top: 6px;">OpenCV + YOLOv11 detection. Flags important frames via WebSocket.</p>
       </div>
-      <div class="card" style="border-top: 3px solid #F0A6C0;">
+      <div class="card" style="border-top: 3px solid #f472b6;">
         <strong>Context Gathering</strong>
         <p style="opacity: 0.7; margin-top: 6px;">VLM reasons about scene meaning, intent, spatial relationships.</p>
       </div>
-      <div class="card" style="border-top: 3px solid #B5A6F0;">
+      <div class="card" style="border-top: 3px solid #a78bfa;">
         <strong>Cognitive</strong>
         <p style="opacity: 0.7; margin-top: 6px;">Memory (Redis + Postgres/VectorDB) + Personality module for decisions.</p>
       </div>
     </div>
     <div class="grid-2 reveal d5" style="margin-top: 12px; max-width: 66%; font-size: 18px;">
-      <div class="card" style="border-top: 3px solid #F0C0A6;">
+      <div class="card" style="border-top: 3px solid #fb923c;">
         <strong>Planning</strong>
         <p style="opacity: 0.7; margin-top: 6px;">Breaks cognitive decisions into step-by-step executable actions.</p>
       </div>
-      <div class="card" style="border-top: 3px solid #D4E84D;">
+      <div class="card" style="border-top: 3px solid #a3e635;">
         <strong>Action</strong>
         <p style="opacity: 0.7; margin-top: 6px;">ROS2 via MCP. NL commands &rarr; ROS topics/services.</p>
       </div>
@@ -680,7 +723,7 @@
   <div class="slide bg-charcoal" data-bg="dark">
     <div class="split">
       <div>
-        <div class="section-label reveal" style="color: var(--accent-gold);">Layer 2</div>
+        <div class="section-label reveal" style="color: var(--secondary);">Layer 2</div>
         <h2 class="title-medium reveal d1">Context Gathering<br>Upgrades</h2>
         <div class="accent-line-light reveal d2"></div>
         <div style="margin-top: 12px;" class="reveal d3">
@@ -726,12 +769,12 @@
         <h2 class="title-medium reveal d1" style="font-size: clamp(24px, 2.5vw, 40px);">Cognitive Layer:<br>Memory System</h2>
         <div class="accent-line reveal d2"></div>
         <div class="stack reveal d3" style="margin-top: 16px; gap: 12px;">
-          <div class="card-light" style="padding: 16px; border-left: 4px solid var(--deep-red);">
+          <div class="card-light" style="padding: 16px; border-left: 4px solid var(--primary);">
             <h3 style="font-size: 20px; margin-bottom: 4px;">Episodic</h3>
             <p style="font-size: 18px; opacity: 0.6;">Specific events</p>
             <p style="font-size: 18px; opacity: 0.4; font-style: italic;">"Ian left a can on the table"</p>
           </div>
-          <div class="card-light" style="padding: 16px; border-left: 4px solid var(--accent-gold);">
+          <div class="card-light" style="padding: 16px; border-left: 4px solid var(--secondary);">
             <h3 style="font-size: 20px; margin-bottom: 4px;">Semantic</h3>
             <p style="font-size: 18px; opacity: 0.6;">Facts &amp; rules</p>
             <p style="font-size: 18px; opacity: 0.4; font-style: italic;">"Lab rule: no food on tables"</p>
@@ -753,7 +796,7 @@
       <div class="reveal d4">
         <div class="subtitle" style="font-size: 18px; margin-bottom: 16px;">Conversational Memory</div>
         <div class="stack" style="gap: 14px;">
-          <div class="card-light" style="padding: 20px; border-left: 4px solid var(--deep-red);">
+          <div class="card-light" style="padding: 20px; border-left: 4px solid var(--primary);">
             <h3 style="font-size: 18px; margin-bottom: 8px;">Short-Term</h3>
             <ul class="clean" style="font-size: 18px;">
               <li>LLM context window (8k&ndash;32k tokens)</li>
@@ -784,7 +827,7 @@
       <div class="reveal d5">
         <div class="subtitle" style="font-size: 18px; margin-bottom: 16px;">Importance Scoring</div>
         <div class="card-light" style="padding: 24px;">
-          <div class="code-block" style="font-size: 18px; padding: 20px; background: #1a1a2e; line-height: 2;">
+          <div class="code-block" style="font-size: 18px; padding: 20px; background: #0f172a; line-height: 2;">
 <span class="key">Importance</span> = f(
   <span class="str">Relevance to function</span>,
   <span class="str">Social relationship impact</span>,
@@ -823,16 +866,16 @@
             <strong>Relationship Tracking</strong>
             <p style="font-size: 18px; opacity: 0.6; margin-top: 4px;">Track interaction history per person. Build trust/reliability scores. Adjust behavior based on past interactions.</p>
           </div>
-          <div class="card-light card-accent" style="border: 2px solid rgba(194,59,34,0.25); padding: 16px;">
+          <div class="card-light card-accent" style="border: 2px solid rgba(14,165,233,0.25); padding: 16px;">
             <strong style="font-size: 18px;">Physical Feasibility &amp; Action Validation</strong>
             <p style="font-size: 18px; opacity: 0.55; margin-top: 6px; margin-bottom: 8px;">Action validation layer — sanity check before passing to planning</p>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-              <div style="background: rgba(194,59,34,0.06); border-radius: 8px; padding: 10px;">
-                <strong style="font-size: 18px; color: var(--deep-red);">Feasibility Check</strong>
+              <div style="background: rgba(14,165,233,0.06); border-radius: 12px; padding: 10px;">
+                <strong style="font-size: 18px; color: var(--primary);">Feasibility Check</strong>
                 <p style="font-size: 18px; opacity: 0.6; margin-top: 3px;">Check if cognitive decisions are physically possible. Verify actions make sense given current environment.</p>
               </div>
-              <div style="background: rgba(194,59,34,0.06); border-radius: 8px; padding: 10px;">
-                <strong style="font-size: 18px; color: var(--deep-red);">Environmental Reasoning</strong>
+              <div style="background: rgba(14,165,233,0.06); border-radius: 12px; padding: 10px;">
+                <strong style="font-size: 18px; color: var(--primary);">Environmental Reasoning</strong>
                 <p style="font-size: 18px; opacity: 0.6; margin-top: 3px;">Spatial reasoning about object affordances. Predict action outcomes before execution.</p>
               </div>
             </div>
@@ -840,7 +883,7 @@
         </div>
       </div>
       <div class="reveal d4">
-        <div class="card-light" style="padding: 24px; border: 2px solid rgba(194,59,34,0.15);">
+        <div class="card-light" style="padding: 24px; border: 2px solid rgba(14,165,233,0.15);">
           <div class="subtitle" style="font-size: 18px; margin-bottom: 12px;">New: Discord Bot</div>
           <p style="font-size: 18px; font-weight: 500; margin-bottom: 8px;">Additional data pipeline for social learning</p>
           <p style="font-size: 18px; opacity: 0.6;">AI teammate in Discord &mdash; observes, decides to engage, responds naturally. Full details next slides &rarr;</p>
@@ -854,7 +897,7 @@
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; height: 100%; align-items: start; padding-top: 10px;">
       <!-- Left Column -->
       <div>
-        <div class="section-label reveal" style="color: var(--accent-gold);">Discord Bot</div>
+        <div class="section-label reveal" style="color: var(--secondary);">Discord Bot</div>
         <h2 class="title-medium reveal d1" style="font-size: 34px;">EDEN as an<br>AI Teammate</h2>
         <div class="accent-line-light reveal d2"></div>
         <p class="body-text reveal d3" style="margin-top: 12px; opacity: 0.6; font-size: 18px;">
@@ -869,20 +912,20 @@
           <div class="card" style="padding: 14px;">
             <strong>What It Does</strong>
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px;">
-              <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 8px;">
-                <strong style="font-size: 18px; color: var(--accent-gold);">Observe</strong>
+              <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px;">
+                <strong style="font-size: 18px; color: var(--secondary);">Observe</strong>
                 <p style="font-size: 18px; opacity: 0.6; margin-top: 2px;">Reads all conversations passively</p>
               </div>
-              <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 8px;">
-                <strong style="font-size: 18px; color: var(--accent-gold);">Decide</strong>
+              <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px;">
+                <strong style="font-size: 18px; color: var(--secondary);">Decide</strong>
                 <p style="font-size: 18px; opacity: 0.6; margin-top: 2px;">Chooses when to participate</p>
               </div>
-              <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 8px;">
-                <strong style="font-size: 18px; color: var(--accent-gold);">Respond</strong>
+              <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px;">
+                <strong style="font-size: 18px; color: var(--secondary);">Respond</strong>
                 <p style="font-size: 18px; opacity: 0.6; margin-top: 2px;">Natural, context-aware replies</p>
               </div>
-              <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 8px;">
-                <strong style="font-size: 18px; color: var(--accent-gold);">Learn</strong>
+              <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px;">
+                <strong style="font-size: 18px; color: var(--secondary);">Learn</strong>
                 <p style="font-size: 18px; opacity: 0.6; margin-top: 2px;">Builds member profiles over time</p>
               </div>
             </div>
@@ -894,14 +937,14 @@
       <div class="reveal d5">
         <div class="card" style="padding: 16px; margin-bottom: 14px;">
           <div class="subtitle" style="font-size: 18px; margin-bottom: 10px;">Bot in Action</div>
-          <div style="background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; min-height: 280px; display: flex; align-items: center; justify-content: center; padding: 12px;">
-            <img src="discord_bot_chat.png" alt="Discord bot interacting in chat" style="max-width: 100%; max-height: 350px; border-radius: 6px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.4; text-align: center;\'>Screenshot: discord_bot_chat.png</p>';">
+          <div style="background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.15); border-radius: 12px; min-height: 280px; display: flex; align-items: center; justify-content: center; padding: 12px;">
+            <img src="discord_bot_chat.png" alt="Discord bot interacting in chat" style="max-width: 100%; max-height: 350px; border-radius: 8px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.4; text-align: center;\'>Screenshot: discord_bot_chat.png</p>';">
           </div>
         </div>
         <div class="card" style="padding: 16px;">
           <div class="subtitle" style="font-size: 18px; margin-bottom: 10px;">Message Logging</div>
-          <div style="background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; min-height: 240px; display: flex; align-items: center; justify-content: center; padding: 12px;">
-            <img src="discord_bot_logs.png" alt="Terminal logging messages" style="max-width: 100%; max-height: 320px; border-radius: 6px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.4; text-align: center;\'>Screenshot: discord_bot_logs.png</p>';">
+          <div style="background: rgba(255,255,255,0.03); border: 1px dashed rgba(255,255,255,0.15); border-radius: 12px; min-height: 240px; display: flex; align-items: center; justify-content: center; padding: 12px;">
+            <img src="discord_bot_logs.png" alt="Terminal logging messages" style="max-width: 100%; max-height: 320px; border-radius: 8px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.4; text-align: center;\'>Screenshot: discord_bot_logs.png</p>';">
           </div>
         </div>
       </div>
@@ -932,15 +975,15 @@
           <div class="card-light" style="padding: 16px;">
             <div class="subtitle" style="font-size: 18px; margin-bottom: 12px;">Workflow</div>
             <div class="stack-tight" style="gap: 5px;">
-              <div style="padding: 8px 12px; background: rgba(88,101,242,0.12); border-radius: 6px; font-size: 18px; font-weight: 600; text-align: center; color: #5865F2;">Discord &mdash; Input Layer</div>
+              <div style="padding: 8px 12px; background: rgba(88,101,242,0.12); border-radius: 8px; font-size: 18px; font-weight: 600; text-align: center; color: #5865F2;">Discord &mdash; Input Layer</div>
               <div style="text-align: center; opacity: 0.3;">&darr;</div>
-              <div style="padding: 8px 12px; background: rgba(194,59,34,0.08); border-radius: 6px; font-size: 18px; font-weight: 600; text-align: center;">EDEN Bot &mdash; Decision Engine</div>
+              <div style="padding: 8px 12px; background: rgba(14,165,233,0.08); border-radius: 8px; font-size: 18px; font-weight: 600; text-align: center;">EDEN Bot &mdash; Decision Engine</div>
               <div style="text-align: center; opacity: 0.3;">&darr;</div>
-              <div style="padding: 8px 12px; background: rgba(194,59,34,0.08); border-radius: 6px; font-size: 18px; font-weight: 600; text-align: center;">Response Generator (Nemotron LLM)</div>
+              <div style="padding: 8px 12px; background: rgba(14,165,233,0.08); border-radius: 8px; font-size: 18px; font-weight: 600; text-align: center;">Response Generator (Nemotron LLM)</div>
               <div style="text-align: center; opacity: 0.3;">&darr;</div>
-              <div style="padding: 8px 12px; background: rgba(88,101,242,0.12); border-radius: 6px; font-size: 18px; font-weight: 600; text-align: center; color: #5865F2;">Discord &mdash; Output Layer</div>
+              <div style="padding: 8px 12px; background: rgba(88,101,242,0.12); border-radius: 8px; font-size: 18px; font-weight: 600; text-align: center; color: #5865F2;">Discord &mdash; Output Layer</div>
               <div style="text-align: center; opacity: 0.3;">&darr;</div>
-              <div style="padding: 8px 12px; background: rgba(74,124,89,0.12); border-radius: 6px; font-size: 18px; font-weight: 600; text-align: center; color: var(--soft-green);">SuperMemory &mdash; Long-Term Storage</div>
+              <div style="padding: 8px 12px; background: rgba(52,211,153,0.12); border-radius: 8px; font-size: 18px; font-weight: 600; text-align: center; color: var(--soft-green);">SuperMemory &mdash; Long-Term Storage</div>
             </div>
           </div>
         </div>
@@ -948,18 +991,18 @@
 
       <!-- Right Column: SuperMemory -->
       <div class="reveal d5">
-        <div class="card-light" style="padding: 16px; margin-bottom: 14px; border: 2px solid rgba(74,124,89,0.2);">
+        <div class="card-light" style="padding: 16px; margin-bottom: 14px; border: 2px solid rgba(52,211,153,0.2);">
           <div class="subtitle" style="font-size: 18px; margin-bottom: 10px; color: var(--soft-green);">SuperMemory Extraction</div>
           <p style="font-size: 18px; opacity: 0.6; margin-bottom: 10px;">Conversations are extracted into structured memory chunks with relevance scores, stored in SuperMemory for the cognitive layer to query.</p>
-          <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 8px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 12px;">
-            <img src="supermemory_extraction.png" alt="SuperMemory extraction data" style="max-width: 100%; max-height: 300px; border-radius: 6px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35; text-align: center;\'>Screenshot: supermemory_extraction.png</p>';">
+          <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 12px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 12px;">
+            <img src="supermemory_extraction.png" alt="SuperMemory extraction data" style="max-width: 100%; max-height: 300px; border-radius: 8px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35; text-align: center;\'>Screenshot: supermemory_extraction.png</p>';">
           </div>
         </div>
-        <div class="card-light" style="padding: 16px; border: 2px solid rgba(74,124,89,0.2);">
+        <div class="card-light" style="padding: 16px; border: 2px solid rgba(52,211,153,0.2);">
           <div class="subtitle" style="font-size: 18px; margin-bottom: 10px; color: var(--soft-green);">SuperMemory Knowledge Graph</div>
           <p style="font-size: 18px; opacity: 0.6; margin-bottom: 10px;">Memories form a connected graph &mdash; relationships between people, places, and events that EDEN can traverse.</p>
-          <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 8px; min-height: 260px; display: flex; align-items: center; justify-content: center; padding: 12px;">
-            <img src="supermemory_graph.png" alt="SuperMemory knowledge graph" style="max-width: 100%; max-height: 340px; border-radius: 6px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35; text-align: center;\'>Screenshot: supermemory_graph.png</p>';">
+          <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 12px; min-height: 260px; display: flex; align-items: center; justify-content: center; padding: 12px;">
+            <img src="supermemory_graph.png" alt="SuperMemory knowledge graph" style="max-width: 100%; max-height: 340px; border-radius: 8px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35; text-align: center;\'>Screenshot: supermemory_graph.png</p>';">
           </div>
         </div>
       </div>
@@ -970,7 +1013,7 @@
   <div class="slide bg-charcoal" data-bg="dark">
     <div class="split">
       <div>
-        <div class="section-label reveal" style="color: var(--accent-gold);">Layer 4</div>
+        <div class="section-label reveal" style="color: var(--secondary);">Layer 4</div>
         <h2 class="title-medium reveal d1">Planning Layer<br>Enhancements</h2>
         <div class="accent-line-light reveal d2"></div>
         <div style="margin-top: 12px;" class="reveal d3">
@@ -989,16 +1032,16 @@
           <strong>Alternative LLM Integration</strong>
           <p style="font-size: 18px; opacity: 0.7; margin-top: 4px;">Try NVIDIA Nemotron (free API). Benchmark against Ollama models. Focus on agentic AI capabilities and reasoning quality.</p>
         </div>
-        <div class="card" style="border: 1px solid rgba(212,168,67,0.3);">
+        <div class="card" style="border: 1px solid rgba(245,158,11,0.3);">
           <strong>Alternative Foundation Models</strong>
           <p style="font-size: 18px; opacity: 0.7; margin-top: 4px;">If current approach falls short, two strong options:</p>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px;">
-            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 14px;">
-              <strong style="color: var(--accent-gold);">&pi;0.5</strong>
+            <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 14px;">
+              <strong style="color: var(--secondary);">&pi;0.5</strong>
               <p style="font-size: 18px; opacity: 0.6; margin-top: 4px;">Preferred option. High-level reasoning + language instruction to low-level action split &mdash; similar architecture to our approach.</p>
             </div>
-            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 14px;">
-              <strong style="color: var(--accent-gold);">NVIDIA GR00T</strong>
+            <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 14px;">
+              <strong style="color: var(--secondary);">NVIDIA GR00T</strong>
               <p style="font-size: 18px; opacity: 0.6; margin-top: 4px;">Pretrained on large robotics datasets. Strong generalization. Good fallback for manipulation tasks.</p>
             </div>
           </div>
@@ -1046,11 +1089,11 @@
         </div>
       </div>
       <div class="stack reveal d6" style="gap: 14px;">
-        <div class="card-light card-accent" style="border: 2px solid rgba(194,59,34,0.2); padding: 16px;">
+        <div class="card-light card-accent" style="border: 2px solid rgba(14,165,233,0.2); padding: 16px;">
           <strong style="font-size: 18px;">3D Labeled Environment for ROS-MCP</strong>
           <p style="font-size: 18px; opacity: 0.6; margin-top: 6px;">Build a 3D model of our custom environment with every tool, object, and location labeled. ROS-MCP uses this map to know exactly where things are and how to navigate between them.</p>
-          <div style="background: rgba(194,59,34,0.06); border-radius: 8px; padding: 10px; margin-top: 10px;">
-            <strong style="font-size: 18px; color: var(--deep-red);">Currently Testing</strong>
+          <div style="background: rgba(14,165,233,0.06); border-radius: 12px; padding: 10px; margin-top: 10px;">
+            <strong style="font-size: 18px; color: var(--primary);">Currently Testing</strong>
             <p style="font-size: 18px; opacity: 0.6; margin-top: 3px;">Active experiments with labeled 3D environment to guide ROS-MCP navigation and task execution.</p>
           </div>
         </div>
@@ -1083,7 +1126,7 @@
           <div class="card-light card-accent" style="padding: 12px;">
             <strong style="font-size: 18px;">Navigation Hints</strong>
             <p style="font-size: 18px; opacity: 0.6; margin-top: 4px;">Pre-computed safe approach positions per fixture. Robot knows where to stand to reach an object without collision.</p>
-            <div style="background: rgba(0,0,0,0.04); border-radius: 6px; padding: 8px; margin-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 18px; color: var(--warm-gray);">
+            <div style="background: rgba(0,0,0,0.04); border-radius: 8px; padding: 8px; margin-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 18px; color: var(--warm-gray);">
               dining_table:<br>
               &nbsp;&nbsp;south: (0.0, -1.5)<br>
               &nbsp;&nbsp;north: (0.0, 1.5)<br>
@@ -1092,7 +1135,7 @@
           </div>
           <div class="card-light card-accent" style="padding: 12px;">
             <strong style="font-size: 18px;">SDF Model Resolution</strong>
-            <p style="font-size: 18px; opacity: 0.6; margin-top: 4px;">When Gazebo reports a sensor hit on <code style="font-size: 18px; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 3px;">teacup1_body</code>, the planner resolves it via YAML to logical object <code style="font-size: 18px; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 3px;">teacup_white</code> on <code style="font-size: 18px; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 3px;">dining_table</code> in <code style="font-size: 18px; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 3px;">dining_room</code>.</p>
+            <p style="font-size: 18px; opacity: 0.6; margin-top: 4px;">When Gazebo reports a sensor hit on <code style="font-size: 18px; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 4px;">teacup1_body</code>, the planner resolves it via YAML to logical object <code style="font-size: 18px; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 4px;">teacup_white</code> on <code style="font-size: 18px; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 4px;">dining_table</code> in <code style="font-size: 18px; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 4px;">dining_room</code>.</p>
           </div>
         </div>
       </div>
@@ -1101,19 +1144,19 @@
       <div class="reveal d5">
         <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
           <div class="card-light" style="padding: 12px;">
-            <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 8px; min-height: 260px; display: flex; align-items: center; justify-content: center; padding: 8px;">
-              <img src="gazebo_1.png" alt="Gazebo world view 1" style="max-width: 100%; max-height: 320px; border-radius: 6px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35; text-align: center;\'>gazebo_1.png</p>';">
+            <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 12px; min-height: 260px; display: flex; align-items: center; justify-content: center; padding: 8px;">
+              <img src="gazebo_1.png" alt="Gazebo world view 1" style="max-width: 100%; max-height: 320px; border-radius: 8px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35; text-align: center;\'>gazebo_1.png</p>';">
             </div>
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
             <div class="card-light" style="padding: 10px;">
-              <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 8px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 8px;">
-                <img src="gazebo_2.png" alt="Gazebo world view 2" style="max-width: 100%; max-height: 280px; border-radius: 6px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35; text-align: center;\'>gazebo_2.png</p>';">
+              <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 12px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 8px;">
+                <img src="gazebo_2.png" alt="Gazebo world view 2" style="max-width: 100%; max-height: 280px; border-radius: 8px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35; text-align: center;\'>gazebo_2.png</p>';">
               </div>
             </div>
             <div class="card-light" style="padding: 10px;">
-              <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 8px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 8px;">
-                <img src="gazebo_3.png" alt="Gazebo world view 3" style="max-width: 100%; max-height: 280px; border-radius: 6px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35; text-align: center;\'>gazebo_3.png</p>';">
+              <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 12px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 8px;">
+                <img src="gazebo_3.png" alt="Gazebo world view 3" style="max-width: 100%; max-height: 280px; border-radius: 8px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35; text-align: center;\'>gazebo_3.png</p>';">
               </div>
             </div>
           </div>
@@ -1121,12 +1164,12 @@
 
         <div class="card-light" style="padding: 12px; margin-top: 10px;">
           <div class="subtitle" style="font-size: 18px; margin-bottom: 8px;">Querying the Semantic Map</div>
-          <div style="background: rgba(0,0,0,0.04); border-radius: 6px; padding: 10px; font-family: 'JetBrains Mono', monospace; font-size: 18px; color: var(--charcoal); line-height: 1.6;">
-            <span style="color: #6B5B95;">import</span> yaml<br>
-            <span style="color: #6B5B95;">with</span> <span style="color: #4A7C59;">open</span>(<span style="color: #C23B22;">'apartment_semantic_map.yaml'</span>) <span style="color: #6B5B95;">as</span> f:<br>
+          <div style="background: rgba(0,0,0,0.04); border-radius: 8px; padding: 10px; font-family: 'JetBrains Mono', monospace; font-size: 18px; color: var(--charcoal); line-height: 1.6;">
+            <span style="color: #8b5cf6;">import</span> yaml<br>
+            <span style="color: #8b5cf6;">with</span> <span style="color: #34d399;">open</span>(<span style="color: #0ea5e9;">'apartment_semantic_map.yaml'</span>) <span style="color: #8b5cf6;">as</span> f:<br>
             &nbsp;&nbsp;world = yaml.safe_load(f)<br><br>
-            <span style="color: #6B6560;"># Get all objects in the dining room</span><br>
-            objects = world[<span style="color: #C23B22;">'rooms'</span>][<span style="color: #C23B22;">'dining_room'</span>][<span style="color: #C23B22;">'objects'</span>]
+            <span style="color: #94a3b8;"># Get all objects in the dining room</span><br>
+            objects = world[<span style="color: #0ea5e9;">'rooms'</span>][<span style="color: #0ea5e9;">'dining_room'</span>][<span style="color: #0ea5e9;">'objects'</span>]
           </div>
         </div>
       </div>
@@ -1138,7 +1181,7 @@
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 32px; height: 100%; align-items: start; padding-top: 10px;">
       <!-- Left Column -->
       <div>
-        <div class="section-label reveal" style="color: var(--accent-gold);">Hardware</div>
+        <div class="section-label reveal" style="color: var(--secondary);">Hardware</div>
         <h2 class="title-medium reveal d1" style="font-size: 34px;">3 Robot Designs +<br>Test Environment</h2>
         <div class="accent-line-light reveal d2"></div>
 
@@ -1150,15 +1193,15 @@
 
           <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;">
             <div class="card" style="padding: 12px; text-align: center;">
-              <strong style="font-size: 18px; color: var(--accent-gold);">Design 1</strong>
+              <strong style="font-size: 18px; color: var(--secondary);">Design 1</strong>
               <p style="font-size: 18px; opacity: 0.7; margin-top: 4px;">4-wheeled robot. Hatchling-inspired but sturdier. Space for all internal components.</p>
             </div>
             <div class="card" style="padding: 12px; text-align: center;">
-              <strong style="font-size: 18px; color: var(--accent-gold);">Design 2</strong>
+              <strong style="font-size: 18px; color: var(--secondary);">Design 2</strong>
               <p style="font-size: 18px; opacity: 0.7; margin-top: 4px;">3-wheeled robot. Compact tricycle layout. Sturdy build with component housing.</p>
             </div>
             <div class="card" style="padding: 12px; text-align: center;">
-              <strong style="font-size: 18px; color: var(--accent-gold);">Design 3</strong>
+              <strong style="font-size: 18px; color: var(--secondary);">Design 3</strong>
               <p style="font-size: 18px; opacity: 0.7; margin-top: 4px;">2-wheeled differential drive. Simplest design. Quick to prototype and iterate.</p>
             </div>
           </div>
@@ -1167,22 +1210,22 @@
 
       <!-- Right Column -->
       <div class="reveal d4">
-        <div class="card" style="padding: 18px; margin-bottom: 12px; border: 1px solid rgba(212,168,67,0.25);">
-          <div class="subtitle" style="font-size: 18px; margin-bottom: 10px; color: var(--accent-gold);">Per-Robot Components</div>
+        <div class="card" style="padding: 18px; margin-bottom: 12px; border: 1px solid rgba(245,158,11,0.25);">
+          <div class="subtitle" style="font-size: 18px; margin-bottom: 10px; color: var(--secondary);">Per-Robot Components</div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-            <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 8px;">
+            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px;">
               <strong style="font-size: 18px;">Motor Drive</strong>
               <p style="font-size: 18px; opacity: 0.6; margin-top: 2px;">SparkFun Brushless Motor Driver</p>
             </div>
-            <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 8px;">
+            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px;">
               <strong style="font-size: 18px;">Power</strong>
               <p style="font-size: 18px; opacity: 0.6; margin-top: 2px;">2S (7.4V) LiPo Battery</p>
             </div>
-            <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 8px;">
+            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px;">
               <strong style="font-size: 18px;">Vision</strong>
               <p style="font-size: 18px; opacity: 0.6; margin-top: 2px;">ESP-CAM32</p>
             </div>
-            <div style="background: rgba(255,255,255,0.05); border-radius: 6px; padding: 8px;">
+            <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 8px;">
               <strong style="font-size: 18px;">IMU Sensor</strong>
               <p style="font-size: 18px; opacity: 0.6; margin-top: 2px;">BNO055 (~$30, easier) or ICM-20948 (cheaper)</p>
             </div>
@@ -1190,10 +1233,10 @@
           <p style="font-size: 18px; opacity: 0.5; margin-top: 8px;">Future: swap ESP-CAM for Jetson for per-robot input layer compute</p>
         </div>
 
-        <div class="card" style="padding: 18px; border: 1px solid rgba(212,168,67,0.25);">
-          <div class="subtitle" style="font-size: 18px; margin-bottom: 10px; color: var(--accent-gold);">Offloaded Compute</div>
+        <div class="card" style="padding: 18px; border: 1px solid rgba(245,158,11,0.25);">
+          <div class="subtitle" style="font-size: 18px; margin-bottom: 10px; color: var(--secondary);">Offloaded Compute</div>
           <p style="font-size: 18px; font-weight: 500; margin-bottom: 8px;">Each robot is independent &mdash; laptop is just the GPU server</p>
-          <div style="background: rgba(255,255,255,0.05); border-radius: 8px; padding: 12px;">
+          <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 12px;">
             <div style="font-size: 18px; font-weight: 600; margin-bottom: 6px;">Host Laptop</div>
             <ul class="clean" style="font-size: 18px; opacity: 0.7;">
               <li>Intel Core Ultra 9 285HX</li>
@@ -1217,26 +1260,26 @@
       <div class="reveal d3" style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; margin-top: 20px;">
         <div class="card-light" style="padding: 12px; text-align: center;">
           <div class="subtitle" style="font-size: 18px; margin-bottom: 8px;">Body</div>
-          <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 8px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 8px;">
-            <img src="robot_body.png" alt="Robot body" style="max-width: 100%; max-height: 380px; border-radius: 6px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35;\'>robot_body.png</p>';">
+          <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 12px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 8px;">
+            <img src="robot_body.png" alt="Robot body" style="max-width: 100%; max-height: 380px; border-radius: 8px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35;\'>robot_body.png</p>';">
           </div>
         </div>
         <div class="card-light" style="padding: 12px; text-align: center;">
           <div class="subtitle" style="font-size: 18px; margin-bottom: 8px;">Internal Layout</div>
-          <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 8px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 8px;">
-            <img src="robot_internal.png" alt="Internal components" style="max-width: 100%; max-height: 380px; border-radius: 6px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35;\'>robot_internal.png</p>';">
+          <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 12px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 8px;">
+            <img src="robot_internal.png" alt="Internal components" style="max-width: 100%; max-height: 380px; border-radius: 8px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35;\'>robot_internal.png</p>';">
           </div>
         </div>
         <div class="card-light" style="padding: 12px; text-align: center;">
           <div class="subtitle" style="font-size: 18px; margin-bottom: 8px;">ESP32-CAM Mount</div>
-          <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 8px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 8px;">
-            <img src="robot_espcam.png" alt="ESP32-CAM case and mount" style="max-width: 100%; max-height: 380px; border-radius: 6px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35;\'>robot_espcam.png</p>';">
+          <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 12px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 8px;">
+            <img src="robot_espcam.png" alt="ESP32-CAM case and mount" style="max-width: 100%; max-height: 380px; border-radius: 8px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35;\'>robot_espcam.png</p>';">
           </div>
         </div>
         <div class="card-light" style="padding: 12px; text-align: center;">
           <div class="subtitle" style="font-size: 18px; margin-bottom: 8px;">Ackermann Steering</div>
-          <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 8px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 8px;">
-            <img src="robot_ackermann.png" alt="Ackermann steering mechanism" style="max-width: 100%; max-height: 380px; border-radius: 6px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35;\'>robot_ackermann.png</p>';">
+          <div style="background: rgba(0,0,0,0.04); border: 1px dashed rgba(0,0,0,0.12); border-radius: 12px; min-height: 300px; display: flex; align-items: center; justify-content: center; padding: 8px;">
+            <img src="robot_ackermann.png" alt="Ackermann steering mechanism" style="max-width: 100%; max-height: 380px; border-radius: 8px; object-fit: contain;" onerror="this.style.display='none'; this.parentElement.innerHTML='<p style=\'font-size: 18px; opacity: 0.35;\'>robot_ackermann.png</p>';">
           </div>
         </div>
       </div>
@@ -1277,41 +1320,41 @@
           <div class="subtitle" style="font-size: 18px; margin-bottom: 14px;">Data Flow Per Robot</div>
           <div class="stack-tight" style="gap: 5px;">
             <div style="display: flex; gap: 8px; align-items: center;">
-              <div style="padding: 8px 12px; background: rgba(194,59,34,0.08); border-radius: 6px; font-size: 18px; font-weight: 600; flex: 1; text-align: center;">ESP-CAM32 + IMU</div>
+              <div style="padding: 8px 12px; background: rgba(14,165,233,0.08); border-radius: 8px; font-size: 18px; font-weight: 600; flex: 1; text-align: center;">ESP-CAM32 + IMU</div>
               <div style="font-size: 18px; opacity: 0.4; white-space: nowrap;">on robot</div>
             </div>
             <div style="text-align: center; opacity: 0.3; font-size: 18px;">&darr; WiFi &darr;</div>
-            <div style="padding: 8px 12px; background: rgba(194,59,34,0.06); border-radius: 6px; font-size: 18px; font-weight: 600; text-align: center;">Input Layer &mdash; YOLOv11 (~2GB VRAM)</div>
+            <div style="padding: 8px 12px; background: rgba(14,165,233,0.06); border-radius: 8px; font-size: 18px; font-weight: 600; text-align: center;">Input Layer &mdash; YOLOv11 (~2GB VRAM)</div>
             <div style="text-align: center; opacity: 0.3;">&darr;</div>
-            <div style="padding: 8px 12px; background: rgba(194,59,34,0.06); border-radius: 6px; font-size: 18px; font-weight: 600; text-align: center;">Context Gathering &mdash; VLM (~4-6GB shared)</div>
+            <div style="padding: 8px 12px; background: rgba(14,165,233,0.06); border-radius: 8px; font-size: 18px; font-weight: 600; text-align: center;">Context Gathering &mdash; VLM (~4-6GB shared)</div>
             <div style="text-align: center; opacity: 0.3;">&darr;</div>
-            <div style="padding: 8px 12px; background: rgba(194,59,34,0.06); border-radius: 6px; font-size: 18px; font-weight: 600; text-align: center;">Cognitive Layer &mdash; Memory + LLM (~8GB)</div>
+            <div style="padding: 8px 12px; background: rgba(14,165,233,0.06); border-radius: 8px; font-size: 18px; font-weight: 600; text-align: center;">Cognitive Layer &mdash; Memory + LLM (~8GB)</div>
             <div style="text-align: center; opacity: 0.3;">&darr;</div>
-            <div style="padding: 8px 12px; background: rgba(194,59,34,0.06); border-radius: 6px; font-size: 18px; font-weight: 600; text-align: center;">Planning &rarr; Action &rarr; Motor Commands</div>
+            <div style="padding: 8px 12px; background: rgba(14,165,233,0.06); border-radius: 8px; font-size: 18px; font-weight: 600; text-align: center;">Planning &rarr; Action &rarr; Motor Commands</div>
             <div style="text-align: center; opacity: 0.3; font-size: 18px;">&darr; WiFi &darr;</div>
             <div style="display: flex; gap: 8px; align-items: center;">
-              <div style="padding: 8px 12px; background: rgba(194,59,34,0.08); border-radius: 6px; font-size: 18px; font-weight: 600; flex: 1; text-align: center;">Motors &amp; Actuators</div>
+              <div style="padding: 8px 12px; background: rgba(14,165,233,0.08); border-radius: 8px; font-size: 18px; font-weight: 600; flex: 1; text-align: center;">Motors &amp; Actuators</div>
               <div style="font-size: 18px; opacity: 0.4; white-space: nowrap;">on robot</div>
             </div>
           </div>
         </div>
 
-        <div class="card-light" style="padding: 16px; border: 2px solid rgba(194,59,34,0.15);">
+        <div class="card-light" style="padding: 16px; border: 2px solid rgba(14,165,233,0.15);">
           <div class="subtitle" style="font-size: 18px; margin-bottom: 8px;">VRAM Budget (24GB)</div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-            <div style="background: rgba(194,59,34,0.06); border-radius: 6px; padding: 8px; text-align: center;">
-              <div style="font-size: 22px; font-weight: 700; color: var(--deep-red);">~6GB</div>
+            <div style="background: rgba(14,165,233,0.06); border-radius: 8px; padding: 8px; text-align: center;">
+              <div style="font-size: 22px; font-weight: 700; color: var(--primary);">~6GB</div>
               <div style="font-size: 18px; opacity: 0.5;">3&times; YOLOv11</div>
             </div>
-            <div style="background: rgba(194,59,34,0.06); border-radius: 6px; padding: 8px; text-align: center;">
-              <div style="font-size: 22px; font-weight: 700; color: var(--deep-red);">~5GB</div>
+            <div style="background: rgba(14,165,233,0.06); border-radius: 8px; padding: 8px; text-align: center;">
+              <div style="font-size: 22px; font-weight: 700; color: var(--primary);">~5GB</div>
               <div style="font-size: 18px; opacity: 0.5;">VLM (shared, batched)</div>
             </div>
-            <div style="background: rgba(194,59,34,0.06); border-radius: 6px; padding: 8px; text-align: center;">
-              <div style="font-size: 22px; font-weight: 700; color: var(--deep-red);">~8GB</div>
+            <div style="background: rgba(14,165,233,0.06); border-radius: 8px; padding: 8px; text-align: center;">
+              <div style="font-size: 22px; font-weight: 700; color: var(--primary);">~8GB</div>
               <div style="font-size: 18px; opacity: 0.5;">LLM (cognitive + plan)</div>
             </div>
-            <div style="background: rgba(74,124,89,0.1); border-radius: 6px; padding: 8px; text-align: center;">
+            <div style="background: rgba(52,211,153,0.1); border-radius: 8px; padding: 8px; text-align: center;">
               <div style="font-size: 22px; font-weight: 700; color: var(--soft-green);">~5GB</div>
               <div style="font-size: 18px; opacity: 0.5;">headroom</div>
             </div>
@@ -1347,19 +1390,19 @@
         <div class="card-light" style="padding: 20px;">
           <div class="subtitle" style="font-size: 18px; margin-bottom: 12px;">Memory Pipeline</div>
           <div class="stack-tight" style="gap: 6px;">
-            <div style="padding: 8px 12px; background: #B5E8F0; border-radius: 6px; font-size: 18px; font-weight: 600; color: #1a3a3f;">Input (Vision / Text)</div>
+            <div style="padding: 8px 12px; background: #67e8f9; border-radius: 8px; font-size: 18px; font-weight: 600; color: #083344;">Input (Vision / Text)</div>
             <div style="text-align: center; opacity: 0.3;">&darr;</div>
-            <div style="padding: 8px 12px; background: #F0A6C0; border-radius: 6px; font-size: 18px; font-weight: 600; color: #3f1a2a;">Frame Classification</div>
+            <div style="padding: 8px 12px; background: #f472b6; border-radius: 8px; font-size: 18px; font-weight: 600; color: #3b0a2a;">Frame Classification</div>
             <div style="text-align: center; opacity: 0.3;">&darr;</div>
-            <div style="padding: 8px 12px; background: #F0C0A6; border-radius: 6px; font-size: 18px; font-weight: 600; color: #3f2a1a;">Importance Scoring</div>
+            <div style="padding: 8px 12px; background: #fb923c; border-radius: 8px; font-size: 18px; font-weight: 600; color: #431a04;">Importance Scoring</div>
             <div style="text-align: center; opacity: 0.3;">&darr;</div>
-            <div style="padding: 8px 12px; background: rgba(0,0,0,0.06); border-radius: 6px; font-size: 18px; font-weight: 600;">Local Storage (SSD)</div>
+            <div style="padding: 8px 12px; background: rgba(0,0,0,0.06); border-radius: 8px; font-size: 18px; font-weight: 600;">Local Storage (SSD)</div>
             <div style="text-align: center; opacity: 0.3;">&darr;</div>
-            <div style="padding: 8px 12px; background: #B5A6F0; border-radius: 6px; font-size: 18px; font-weight: 600; color: #1a1a3f;">Memory Extraction</div>
+            <div style="padding: 8px 12px; background: #a78bfa; border-radius: 8px; font-size: 18px; font-weight: 600; color: #1e1048;">Memory Extraction</div>
             <div style="text-align: center; opacity: 0.3;">&darr;</div>
-            <div style="padding: 8px 12px; background: #D4E84D; border-radius: 6px; font-size: 18px; font-weight: 600; color: #2a3f1a;">SuperMemory Upload</div>
+            <div style="padding: 8px 12px; background: #a3e635; border-radius: 8px; font-size: 18px; font-weight: 600; color: #1a2e05;">SuperMemory Upload</div>
             <div style="text-align: center; opacity: 0.3;">&darr;</div>
-            <div style="padding: 8px 12px; background: var(--deep-red); border-radius: 6px; font-size: 18px; font-weight: 600; color: white;">Knowledge Graph</div>
+            <div style="padding: 8px 12px; background: var(--primary); border-radius: 8px; font-size: 18px; font-weight: 600; color: #0a0f1c;">Knowledge Graph</div>
           </div>
         </div>
       </div>
@@ -1370,7 +1413,7 @@
 
   <!-- ============ SLIDE 16: SUCCESS METRICS ============ -->
   <div class="slide bg-gradient" data-bg="dark">
-    <div class="section-label reveal" style="color: var(--accent-gold);">Targets</div>
+    <div class="section-label reveal" style="color: var(--secondary);">Targets</div>
     <h2 class="title-medium reveal d1">Success Metrics</h2>
     <div class="accent-line-light reveal d2"></div>
 
@@ -1467,17 +1510,26 @@
     counter.textContent = (current + 1) + ' / ' + slides.length;
 
     const bg = slides[current].dataset.bg;
-    const color = bg === 'dark' ? 'var(--cream)' : 'var(--charcoal)';
+    const color = bg === 'dark' ? 'var(--cool-white)' : 'var(--charcoal)';
     counter.style.color = color;
     dateLabel.style.color = color;
-    progress.style.background = bg === 'dark' ? 'var(--accent-gold)' : 'var(--deep-red)';
+    progress.style.background = bg === 'dark' ? 'var(--secondary)' : 'var(--primary)';
+    progress.style.boxShadow = bg === 'dark'
+      ? '0 0 12px rgba(245, 158, 11, 0.5), 0 0 4px rgba(245, 158, 11, 0.3)'
+      : '0 0 12px rgba(0, 212, 255, 0.5), 0 0 4px rgba(0, 212, 255, 0.3)';
 
     const dots = navDotsContainer.querySelectorAll('.nav-dot');
     dots.forEach((d, i) => {
       d.classList.toggle('active', i === current);
-      d.style.background = i === current
-        ? (bg === 'dark' ? 'var(--accent-gold)' : 'var(--deep-red)')
-        : (bg === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)');
+      if (i === current) {
+        d.style.background = bg === 'dark' ? 'var(--secondary)' : 'var(--primary)';
+        d.style.boxShadow = bg === 'dark'
+          ? '0 0 10px rgba(245, 158, 11, 0.5), 0 0 4px rgba(245, 158, 11, 0.3)'
+          : '0 0 10px rgba(0, 212, 255, 0.5), 0 0 4px rgba(0, 212, 255, 0.3)';
+      } else {
+        d.style.background = bg === 'dark' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)';
+        d.style.boxShadow = 'none';
+      }
     });
   }
 
