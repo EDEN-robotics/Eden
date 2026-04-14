@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <script>
+      // GitHub Pages SPA redirect: encode the path and redirect to index.html
+      var path = window.location.pathname.replace('/Eden', '') || '/';
+      var search = window.location.search;
+      var hash = window.location.hash;
+      sessionStorage.setItem('spa_redirect', path + search + hash);
+      window.location.replace('/Eden/');
+    </script>
+  </head>
+  <body></body>
+</html>

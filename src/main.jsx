@@ -25,7 +25,7 @@ function AppContent() {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     {hasClerkKey ? (
-      <ClerkProvider publishableKey={PUBLISHABLE_KEY}>
+      <ClerkProvider publishableKey={PUBLISHABLE_KEY} signInForceRedirectUrl="/Eden/chat" signUpForceRedirectUrl="/Eden/chat">
         <AppContent />
       </ClerkProvider>
     ) : (

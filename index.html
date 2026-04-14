@@ -5,6 +5,14 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>eden-react</title>
+    <script>
+      // Restore path after GitHub Pages 404 redirect
+      var redirect = sessionStorage.getItem('spa_redirect');
+      if (redirect) {
+        sessionStorage.removeItem('spa_redirect');
+        history.replaceState(null, '', '/Eden' + redirect);
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
