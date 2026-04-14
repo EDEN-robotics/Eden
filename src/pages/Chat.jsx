@@ -131,9 +131,11 @@ export default function Chat() {
   const [input, setInput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [loadingHistory, setLoadingHistory] = useState(true)
+  const [onlineMembers, setOnlineMembers] = useState([])
 
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
+  const channelRef = useRef(null)
 
   // Gate: show sign-in wall if not authenticated
   if (isLoaded && !isSignedIn) {
@@ -174,21 +176,39 @@ export default function Chat() {
     loadMessages()
   }, [])
 
-  // Realtime subscription
+  // Realtime subscription + Presence
   useEffect(() => {
-    const channel = supabase
-      .channel('messages-channel')
+    if (!user) return
+
+    const channel = supabase.channel('messages-channel', { config: { presence: { key: user.id } } })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
         setMessages((prev) => {
-          // Avoid duplicates (we optimistically add bot messages)
           if (prev.find((m) => m.id === payload.new.id)) return prev
           return [...prev, payload.new]
         })
       })
-      .subscribe()
+      .on('presence', { event: 'sync' }, () => {
+        const state = channel.presenceState()
+        const members = Object.values(state).flat().map((p) => ({
+          user_id: p.user_id,
+          user_name: p.user_name,
+          user_avatar: p.user_avatar,
+        }))
+        setOnlineMembers(members)
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await channel.track({
+            user_id: user.id,
+            user_name: user.fullName || user.firstName || 'Member',
+            user_avatar: user.imageUrl || null,
+          })
+        }
+      })
 
+    channelRef.current = channel
     return () => supabase.removeChannel(channel)
-  }, [])
+  }, [user])
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -418,7 +438,8 @@ export default function Chat() {
       </aside>
 
       {/* Main chat area */}
-      <div className="flex flex-col flex-1 min-w-0">
+      <div className="flex flex-1 min-w-0">
+        <div className="flex flex-col flex-1 min-w-0">
 
         {/* Channel header */}
         <header className="flex items-center gap-3 px-6 py-4 border-b border-white/10 flex-shrink-0">
@@ -508,6 +529,60 @@ export default function Chat() {
             </div>
           )}
         </div>
+        </div>{/* end flex-col chat area */}
+
+        {/* Members sidebar */}
+        <aside className="w-52 flex-shrink-0 border-l border-white/10 bg-bg-secondary flex flex-col">
+          <div className="px-4 py-4 border-b border-white/10">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-white/30">Members</p>
+          </div>
+          <div className="flex-1 overflow-y-auto py-3 eden-chat-scroll">
+            {onlineMembers.length > 0 && (
+              <div className="px-3 mb-4">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-white/25 px-2 mb-2">
+                  Online — {onlineMembers.length}
+                </p>
+                {onlineMembers.map((m) => (
+                  <div key={m.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5">
+                    <div className="relative">
+                      <Avatar name={m.user_name} imageUrl={m.user_avatar} size={7} />
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-bg-secondary" />
+                    </div>
+                    <span className="text-xs text-white/70 truncate">{m.user_name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(() => {
+              const seen = new Set(onlineMembers.map((m) => m.user_id))
+              const offline = []
+              for (const msg of messages) {
+                if (msg.role === 'user' && !seen.has(msg.user_id)) {
+                  seen.add(msg.user_id)
+                  offline.push({ user_id: msg.user_id, user_name: msg.user_name, user_avatar: msg.user_avatar })
+                }
+              }
+              if (offline.length === 0) return null
+              return (
+                <div className="px-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-white/25 px-2 mb-2">
+                    Offline — {offline.length}
+                  </p>
+                  {offline.map((m) => (
+                    <div key={m.user_id} className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-white/5">
+                      <div className="relative opacity-50">
+                        <Avatar name={m.user_name} imageUrl={m.user_avatar} size={7} />
+                      </div>
+                      <span className="text-xs text-white/40 truncate">{m.user_name}</span>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
+          </div>
+        </aside>
+
       </div>
     </div>
   )
