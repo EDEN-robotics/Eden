@@ -406,7 +406,7 @@ export default function Chat() {
                 <p className="text-[10px] text-white/40 truncate">{user.primaryEmailAddress?.emailAddress}</p>
               </div>
               <button
-                onClick={() => signOut()}
+                onClick={() => signOut({ redirectUrl: '/Eden/chat' })}
                 className="text-white/30 hover:text-white/70 transition-colors"
                 title="Sign out"
               >
