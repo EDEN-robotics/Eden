@@ -37,6 +37,7 @@ const Nav = () => (
       <a href="#architecture" className="hover:text-white transition-colors">Architecture</a>
       <a href="#walkthrough" className="hover:text-white transition-colors">How it works</a>
       <a href="#roadmap" className="hover:text-white transition-colors">Roadmap</a>
+      <Link to="/chat" className="hover:text-white transition-colors">Chat</Link>
       <a href="#github" className="flex items-center gap-2 hover:text-white transition-colors border-l border-white/10 pl-8">
         <Github size={14} /> GitHub
       </a>
