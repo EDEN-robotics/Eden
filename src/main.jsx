@@ -5,7 +5,7 @@ import { ClerkProvider } from '@clerk/clerk-react'
 import './index.css'
 import App from './App.jsx'
 import Documentation from './pages/Documentation.jsx'
-import ChatWidget from './components/ChatWidget.jsx'
+import Chat from './pages/Chat.jsx'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const hasClerkKey = PUBLISHABLE_KEY && !PUBLISHABLE_KEY.includes('YOUR_KEY_HERE')
@@ -16,8 +16,8 @@ function AppContent() {
       <Routes>
         <Route path="/" element={<App />} />
         <Route path="/docs/*" element={<Documentation />} />
+        <Route path="/chat" element={<Chat />} />
       </Routes>
-      <ChatWidget />
     </BrowserRouter>
   )
 }
