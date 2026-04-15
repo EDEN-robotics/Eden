@@ -12,6 +12,10 @@ import {
   formatMemoriesForPrompt,
   supermemoryConfigured,
   relativeTime,
+  captureIdentity,
+  addProfileFact,
+  getKnownPeople,
+  formatPeopleForPrompt,
 } from '../lib/supermemory'
 import "@fontsource/inter/400.css"
 import "@fontsource/inter/600.css"
@@ -112,6 +116,8 @@ function LayerPipeline({ stage }) {
 const SLASH_COMMANDS = [
   { cmd: '/memories', args: '[query]', desc: 'Recall what EDEN remembers', },
   { cmd: '/whoami',   args: '',        desc: 'What EDEN knows about you' },
+  { cmd: '/profile',  args: '<fact>',  desc: 'Teach EDEN a fact about yourself' },
+  { cmd: '/people',   args: '',        desc: 'Who EDEN has met in this workspace' },
   { cmd: '/layers',   args: '',        desc: 'Architecture overview' },
   { cmd: '/help',     args: '',        desc: 'List all commands' },
 ]
@@ -151,6 +157,27 @@ async function runSlashCommand({ text, user, pushBotMessage }) {
     if (!mems.length) return pushBotMessage(`I don't have any memories of **${user.fullName || user.firstName}** yet. Say something and I'll start remembering.`)
     const lines = mems.slice(0, 6).map((m, i) => `${i + 1}. ${m.content.length > 140 ? m.content.slice(0, 140) + '…' : m.content} _(${m.metadata?.ts ? relativeTime(m.metadata.ts) : 'recent'})_`)
     return pushBotMessage(`**What I remember about ${user.fullName || user.firstName}:**\n\n${lines.join('\n')}`)
+  }
+
+  if (cmd === '/profile') {
+    if (!rest) return pushBotMessage('Usage: `/profile <fact about yourself>` — e.g. `/profile I lead hardware integration and prefer Rust`.')
+    await addProfileFact({
+      userId: user.id,
+      userName: user.fullName || user.firstName || 'Member',
+      fact: rest,
+    })
+    return pushBotMessage(`✅ Committed to your identity in the Perception Layer:\n\n> ${rest}\n\nI'll remember this permanently across sessions.`)
+  }
+
+  if (cmd === '/people') {
+    const people = await getKnownPeople({ limit: 20 })
+    if (!people.length) return pushBotMessage('No people captured yet. Identities are added to the Perception Layer when members sign in.')
+    const lines = people.map((p, i) => {
+      const first = p.content?.split('\n')[0] || 'unknown'
+      const kind = p.metadata?.kind === 'identity' ? '🪪 identity' : '📌 fact'
+      return `${i + 1}. \`${kind}\` ${first}`
+    })
+    return pushBotMessage(`**People in the EDEN workspace (Perception Layer):**\n\n${lines.join('\n')}`)
   }
 
   if (cmd === '/memories') {
@@ -454,6 +481,24 @@ export default function Chat() {
     )
   }
 
+  // Perception Layer: capture identity on sign-in (once per user per device)
+  useEffect(() => {
+    if (!user || !isSignedIn) return
+    const key = `eden:identified:${user.id}`
+    if (typeof window !== 'undefined' && window.localStorage.getItem(key)) return
+    captureIdentity({
+      userId: user.id,
+      userName: user.fullName || user.firstName || 'Member',
+      email: user.primaryEmailAddress?.emailAddress,
+      avatarUrl: user.imageUrl || null,
+    }).then((res) => {
+      if (res?.ok && typeof window !== 'undefined') {
+        window.localStorage.setItem(key, '1')
+        setMemoryRefresh((n) => n + 1)
+      }
+    })
+  }, [user, isSignedIn])
+
   // Load message history
   useEffect(() => {
     async function loadMessages() {
@@ -623,17 +668,24 @@ export default function Chat() {
     setLayerStage(3)
 
     const searchQuery = stripMention(content) || content
-    const retrievedMemories = await searchMemories({ query: searchQuery, userId: user.id, limit: 5 })
+    const [retrievedMemories, knownPeople] = await Promise.all([
+      searchMemories({ query: searchQuery, userId: user.id, limit: 5 }),
+      getKnownPeople({ limit: 12 }),
+    ])
     setRetrieving(false)
     setLayerStage(4) // Cognitive (LLM thinking)
 
     const memoryBlock = formatMemoriesForPrompt(retrievedMemories)
+    const peopleBlock = formatPeopleForPrompt(knownPeople, {
+      name: user.fullName || user.firstName || 'Member',
+      email: user.primaryEmailAddress?.emailAddress,
+    })
 
     const allMsgs = [...messages]
     if (userMsg) allMsgs.push(userMsg)
 
     const conversation = [
-      { role: 'system', content: SYSTEM_PROMPT + memoryBlock },
+      { role: 'system', content: SYSTEM_PROMPT + peopleBlock + memoryBlock },
       ...allMsgs.slice(-20).map((m) => ({ role: m.role, content: m.content })),
     ]
 

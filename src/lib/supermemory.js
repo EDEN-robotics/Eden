@@ -140,4 +140,128 @@ function relativeTime(ts) {
   return `${d}d ago`
 }
 
-export { CHANNEL_TAG, relativeTime }
+// ───── Perception / Input Layer: person data ─────
+// Captures real identity into Supermemory as permanent (isStatic: true) records
+// so EDEN's Cognitive Layer always has grounded context about who is in the room.
+
+const PEOPLE_TAG = 'eden-people'
+
+export async function captureIdentity({ userId, userName, email, avatarUrl, extra = {} }) {
+  if (!supermemoryConfigured() || !userId) return null
+
+  const joinedAt = new Date().toISOString()
+  const content = [
+    `Person: ${userName}`,
+    email ? `Email: ${email}` : null,
+    `User ID: ${userId}`,
+    avatarUrl ? `Avatar: ${avatarUrl}` : null,
+    `First seen: ${joinedAt}`,
+    extra.role ? `Role: ${extra.role}` : null,
+    extra.bio ? `Bio: ${extra.bio}` : null,
+  ].filter(Boolean).join('\n')
+
+  const metadata = {
+    kind: 'identity',
+    user_id: userId,
+    user_name: userName,
+    email: email || null,
+    avatar_url: avatarUrl || null,
+    joined_at: joinedAt,
+    source: 'perception-layer',
+    ...extra,
+  }
+
+  try {
+    // Write to the user's private container AND to the channel-wide People index
+    const body = (tag) => ({
+      memories: [{ content, isStatic: true, metadata }],
+      containerTag: tag,
+    })
+    await Promise.all([
+      fetch(`${API}/memories`, { method: 'POST', headers: authed(), body: JSON.stringify(body(userTag(userId))) }),
+      fetch(`${API}/memories`, { method: 'POST', headers: authed(), body: JSON.stringify(body(PEOPLE_TAG)) }),
+    ])
+    return { ok: true }
+  } catch (err) {
+    console.warn('[supermemory] captureIdentity failed:', err)
+    return null
+  }
+}
+
+// Add a free-form profile fact ("I'm the hardware lead", "my favorite robot is Spot")
+export async function addProfileFact({ userId, userName, fact }) {
+  if (!supermemoryConfigured() || !userId || !fact) return null
+  const metadata = {
+    kind: 'profile_fact',
+    user_id: userId,
+    user_name: userName,
+    source: 'perception-layer',
+    ts: Date.now(),
+  }
+  try {
+    await Promise.all([
+      fetch(`${API}/memories`, {
+        method: 'POST', headers: authed(),
+        body: JSON.stringify({
+          memories: [{ content: `${userName}: ${fact}`, isStatic: true, metadata }],
+          containerTag: userTag(userId),
+        }),
+      }),
+      fetch(`${API}/memories`, {
+        method: 'POST', headers: authed(),
+        body: JSON.stringify({
+          memories: [{ content: `${userName}: ${fact}`, isStatic: true, metadata }],
+          containerTag: PEOPLE_TAG,
+        }),
+      }),
+    ])
+    return { ok: true }
+  } catch (err) {
+    console.warn('[supermemory] addProfileFact failed:', err)
+    return null
+  }
+}
+
+// Fetch identities currently in the room — used to ground the system prompt
+// so EDEN knows WHO it's talking to before it reasons.
+export async function getKnownPeople({ limit = 20 } = {}) {
+  if (!supermemoryConfigured()) return []
+  try {
+    const res = await fetch(`${API}/search`, {
+      method: 'POST', headers: authed(),
+      body: JSON.stringify({
+        q: 'person identity teammate',
+        containerTag: PEOPLE_TAG,
+        searchMode: 'hybrid',
+        limit,
+      }),
+    })
+    if (!res.ok) return []
+    const json = await res.json()
+    const results = json.results || json.memories || json.data || []
+    return results.map((r) => ({
+      content: r.content || r.text || '',
+      metadata: r.metadata || {},
+    })).filter((r) => r.metadata?.kind === 'identity' || r.metadata?.kind === 'profile_fact' || r.content)
+  } catch (err) {
+    console.warn('[supermemory] getKnownPeople failed:', err)
+    return []
+  }
+}
+
+export function formatPeopleForPrompt(people, currentUser) {
+  if (!people?.length) return ''
+  const lines = people.slice(0, 12).map((p) => {
+    const who = p.metadata?.user_name || 'unknown'
+    const email = p.metadata?.email ? ` (${p.metadata.email})` : ''
+    const role = p.metadata?.role ? ` — ${p.metadata.role}` : ''
+    const first = p.content?.split('\n')[0]?.replace(/^Person:\s*/, '') || who
+    return `  - ${first}${email}${role}`
+  })
+  const meLine = currentUser
+    ? `\n\nYou are currently talking with: **${currentUser.name}** (${currentUser.email || 'no email'}). Address them by name naturally.`
+    : ''
+  return `\n\n=== PEOPLE IN THIS WORKSPACE (from Perception Layer) ===\n${lines.join('\n')}${meLine}\n=== END PEOPLE ===`
+}
+
+export { CHANNEL_TAG, PEOPLE_TAG, relativeTime }

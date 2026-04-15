@@ -37,6 +37,7 @@ const Nav = () => (
       <a href="#architecture" className="hover:text-white transition-colors">Architecture</a>
       <a href="#walkthrough" className="hover:text-white transition-colors">How it works</a>
       <a href="#roadmap" className="hover:text-white transition-colors">Roadmap</a>
+      <a href={`${import.meta.env.BASE_URL}dr3.html`} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Slides</a>
       <Link to="/chat" className="hover:text-white transition-colors">Chat</Link>
       <a href="#github" className="flex items-center gap-2 hover:text-white transition-colors border-l border-white/10 pl-8">
         <Github size={14} /> GitHub
@@ -754,9 +755,19 @@ export default function App() {
                     </span>
                   ))}
                 </div>
-                <Link to="/chat" className="inline-flex items-center gap-2 bg-white text-black font-semibold text-sm px-5 py-2.5 rounded-lg hover:bg-white/90 transition-colors">
-                  Open Chat <ArrowRight size={14} />
-                </Link>
+                <div className="flex flex-wrap gap-3">
+                  <Link to="/chat" className="inline-flex items-center gap-2 bg-white text-black font-semibold text-sm px-5 py-2.5 rounded-lg hover:bg-white/90 transition-colors">
+                    Open Chat <ArrowRight size={14} />
+                  </Link>
+                  <a
+                    href={`${import.meta.env.BASE_URL}dr3.html`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 border border-white/20 hover:border-cyan-400/40 hover:bg-cyan-400/5 text-white/80 hover:text-white font-semibold text-sm px-5 py-2.5 rounded-lg transition-colors"
+                  >
+                    View Slides <ArrowRight size={14} />
+                  </a>
+                </div>
               </div>
               <div className="hidden md:flex flex-col gap-2 min-w-[260px]">
                 {[
@@ -773,6 +784,36 @@ export default function App() {
               </div>
             </div>
           </div>
+        </section>
+
+        {/* Slide deck preview */}
+        <section id="slides" className="py-24">
+          <SectionHeading
+            number="02.5"
+            title="Design Review 3"
+            subtitle="The full EDEN deck — architecture, cognitive layer, hardware, and demos. Presented live."
+          />
+          <div className="relative rounded-2xl border border-white/10 overflow-hidden bg-black/40 group">
+            <div className="absolute top-4 right-4 z-10 flex gap-2">
+              <a
+                href={`${import.meta.env.BASE_URL}dr3.html`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest px-3 py-1.5 rounded-md bg-white/10 backdrop-blur border border-white/20 hover:bg-white/20 text-white transition-colors"
+              >
+                Open fullscreen <ArrowRight size={12} />
+              </a>
+            </div>
+            <iframe
+              src={`${import.meta.env.BASE_URL}dr3.html`}
+              title="EDEN DR3 slide deck"
+              className="w-full aspect-video bg-black"
+              loading="lazy"
+            />
+          </div>
+          <p className="text-text-dim text-xs mt-4 text-center font-mono">
+            Use arrow keys or click inside the frame to navigate slides · Press <kbd className="px-1.5 py-0.5 bg-white/10 rounded border border-white/20">F</kbd> for fullscreen
+          </p>
         </section>
 
         {/* 4. High-Level Architecture */}
