@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser, useClerk, SignInButton } from '@clerk/clerk-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Hash, Send, Loader2, ArrowLeft, LogOut, LogIn, Brain, Sparkles, ChevronRight, X, AtSign, Eye, Globe, Layers, Cpu, Zap, Terminal } from 'lucide-react'
+import { Hash, Send, Loader2, ArrowLeft, LogOut, LogIn, Brain, Sparkles, ChevronRight, X, AtSign, Eye, Globe, Layers, Cpu, Zap, Terminal, Image as ImageIcon, Paperclip } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import OnboardingModal from './OnboardingModal'
 import { supabase } from '../lib/supabase'
 import {
   addMemory,
@@ -37,6 +38,49 @@ Keep replies under 180 words unless the user asks for detail. Use markdown for l
 
 const OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
 const MODEL = 'nvidia/nemotron-3-super-120b-a12b:free'
+const VISION_MODEL = 'meta-llama/llama-3.2-90b-vision-instruct:free'
+
+// Client-side image compression → data URL. Targets ≤ 800px and JPEG quality 0.7
+// so we can round-trip through Supabase's text column without blowing up row size.
+function compressImageFile(file, { maxDim = 800, quality = 0.7 } = {}) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('read failed'))
+    reader.onload = () => {
+      const img = new Image()
+      img.onerror = () => reject(new Error('image decode failed'))
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height))
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width = w
+        canvas.height = h
+        const ctx = canvas.getContext('2d')
+        ctx.drawImage(img, 0, 0, w, h)
+        const dataUrl = canvas.toDataURL('image/jpeg', quality)
+        resolve({ dataUrl, w, h })
+      }
+      img.src = reader.result
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+// Message content convention for attachments:
+//   [img:<dataurl>]\n\n<text>
+const IMG_RE = /^\[img:(data:image\/[a-z]+;base64,[^\]]+)\]\s*\n?/i
+
+function parseMessageContent(content) {
+  if (!content) return { image: null, text: '' }
+  const m = content.match(IMG_RE)
+  if (!m) return { image: null, text: content }
+  return { image: m[1], text: content.slice(m[0].length).trim() }
+}
+
+function buildImageMessageContent(dataUrl, text) {
+  return `[img:${dataUrl}]\n\n${text || ''}`
+}
 
 // ───── Helpers ─────
 
@@ -298,9 +342,24 @@ function MessageGroup({ messages, isBot, memoriesById }) {
         <div className="space-y-1">
           {messages.map((msg) => {
             const retrieved = memoriesById?.[msg.id]
+            const { image, text } = parseMessageContent(msg.content)
             return (
               <div key={msg.id} className="text-sm text-white/80 leading-relaxed">
                 {isBot && retrieved && <MemoryChips memories={retrieved} />}
+                {image && (
+                  <div className="mb-2 max-w-md">
+                    <a href={image} target="_blank" rel="noopener noreferrer" className="block">
+                      <img
+                        src={image}
+                        alt="attached"
+                        className="rounded-lg border border-white/10 hover:border-cyan-400/30 transition-colors max-h-80 object-contain"
+                      />
+                    </a>
+                    <div className="mt-1 text-[10px] font-mono uppercase tracking-widest text-amber-300/70 flex items-center gap-1.5">
+                      <Eye size={10} /> perception layer · image
+                    </div>
+                  </div>
+                )}
                 {isBot ? (
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
@@ -315,17 +374,17 @@ function MessageGroup({ messages, isBot, memoriesById }) {
                       strong: ({ children }) => <strong className="text-white font-semibold">{children}</strong>,
                     }}
                   >
-                    {msg.content}
+                    {text || msg.content}
                   </ReactMarkdown>
-                ) : (
+                ) : text ? (
                   <span>
-                    {msg.content.split(/(@eden\b)/gi).map((part, i) =>
+                    {text.split(/(@eden\b)/gi).map((part, i) =>
                       /^@eden$/i.test(part)
                         ? <span key={i} className="bg-cyan-500/15 text-cyan-300 px-1 rounded font-medium">{part}</span>
                         : <span key={i}>{part}</span>
                     )}
                   </span>
-                )}
+                ) : null}
               </div>
             )
           })}
@@ -453,6 +512,10 @@ export default function Chat() {
   const [memoriesById, setMemoriesById] = useState({}) // bot msg id -> [{content, metadata, score, source}]
   const [retrieving, setRetrieving] = useState(false)
   const [layerStage, setLayerStage] = useState(0) // 0=idle, 1..6=active layer, 7=done
+  const [onboardingOpen, setOnboardingOpen] = useState(false)
+  const [attachedImage, setAttachedImage] = useState(null) // { dataUrl, w, h, name, size }
+  const [attaching, setAttaching] = useState(false)
+  const fileInputRef = useRef(null)
 
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
@@ -497,6 +560,15 @@ export default function Chat() {
         setMemoryRefresh((n) => n + 1)
       }
     })
+  }, [user, isSignedIn])
+
+  // Onboarding: show the 2-fact modal once per user/device
+  useEffect(() => {
+    if (!user || !isSignedIn) return
+    if (typeof window === 'undefined') return
+    if (!supermemoryConfigured()) return
+    const done = window.localStorage.getItem(`eden:onboarded:${user.id}`)
+    if (!done) setOnboardingOpen(true)
   }, [user, isSignedIn])
 
   // Load message history
@@ -607,13 +679,33 @@ export default function Chat() {
     return botMsg
   }
 
+  async function handleFilePick(e) {
+    const file = e.target.files?.[0]
+    e.target.value = '' // reset so the same file can be picked again
+    if (!file) return
+    if (!file.type.startsWith('image/')) {
+      console.warn('only images supported')
+      return
+    }
+    setAttaching(true)
+    try {
+      const { dataUrl, w, h } = await compressImageFile(file, { maxDim: 800, quality: 0.7 })
+      setAttachedImage({ dataUrl, w, h, name: file.name, size: dataUrl.length })
+    } catch (err) {
+      console.warn('image compress failed:', err)
+    } finally {
+      setAttaching(false)
+    }
+  }
+
   async function sendMessage(override) {
     const raw = (override ?? input).trim()
-    if (!raw || streaming || !isSignedIn) return
+    const hasImage = !!attachedImage
+    if ((!raw && !hasImage) || streaming || !isSignedIn) return
     if (!override) setInput('')
 
     // Slash command fast-path — does not broadcast as user message
-    if (isSlashCommand(raw)) {
+    if (!hasImage && isSlashCommand(raw)) {
       setStreaming(true)
       setLayerStage(3) // Supermemory
       try {
@@ -629,7 +721,11 @@ export default function Chat() {
       return
     }
 
-    const content = raw
+    const image = hasImage ? attachedImage.dataUrl : null
+    const textContent = raw
+    const content = image ? buildImageMessageContent(image, textContent) : textContent
+    // Clear the attachment now so the UI resets immediately
+    if (hasImage) setAttachedImage(null)
 
     // Insert user message
     const { data: userMsg } = await supabase
@@ -646,16 +742,21 @@ export default function Chat() {
 
     if (userMsg) setMessages((prev) => prev.find((m) => m.id === userMsg.id) ? prev : [...prev, userMsg])
 
-    // Store in Supermemory (fire-and-forget)
+    // Store in Supermemory (fire-and-forget). For images we store only the
+    // text caption + a marker — data URLs would blow up Supermemory tokens.
+    const memoryContent = image
+      ? `[image attached${textContent ? `: "${textContent}"` : ' (no caption)'}]`
+      : content
     addMemory({
-      content,
+      content: memoryContent,
       userId: user.id,
       userName: user.fullName || user.firstName || 'Member',
       role: 'user',
+      extraMetadata: image ? { has_image: true, layer: 'perception' } : {},
     }).then(() => setMemoryRefresh((n) => n + 1))
 
-    // Only trigger bot if @eden mentioned
-    if (!mentionsEden(content)) return
+    // Only trigger bot if @eden mentioned (or if an image was sent explicitly @eden)
+    if (!mentionsEden(textContent)) return
 
     setStreaming(true)
     setRetrieving(true)
@@ -667,7 +768,7 @@ export default function Chat() {
     await new Promise((r) => setTimeout(r, 180))
     setLayerStage(3)
 
-    const searchQuery = stripMention(content) || content
+    const searchQuery = stripMention(textContent) || textContent || 'image'
     const [retrievedMemories, knownPeople] = await Promise.all([
       searchMemories({ query: searchQuery, userId: user.id, limit: 5 }),
       getKnownPeople({ limit: 12 }),
@@ -684,10 +785,38 @@ export default function Chat() {
     const allMsgs = [...messages]
     if (userMsg) allMsgs.push(userMsg)
 
-    const conversation = [
-      { role: 'system', content: SYSTEM_PROMPT + peopleBlock + memoryBlock },
-      ...allMsgs.slice(-20).map((m) => ({ role: m.role, content: m.content })),
-    ]
+    // For prior messages, collapse our [img:...] prefix into a caption so
+    // text-only history doesn't pump data URLs into the LLM context.
+    const historyMsgs = allMsgs.slice(-20).map((m) => {
+      const parsed = parseMessageContent(m.content)
+      const text = parsed.image
+        ? `[${m.user_name || 'user'} shared an image]${parsed.text ? `: ${parsed.text}` : ''}`
+        : m.content
+      return { role: m.role, content: text }
+    })
+
+    let conversation
+    if (image) {
+      // Vision-model path: only the latest user message is multimodal
+      const lastIdx = historyMsgs.length - 1
+      const multimodalLast = {
+        role: 'user',
+        content: [
+          { type: 'text', text: textContent || 'Describe what you see in this image, and tie it back to anything relevant in your memory.' },
+          { type: 'image_url', image_url: { url: image } },
+        ],
+      }
+      conversation = [
+        { role: 'system', content: SYSTEM_PROMPT + peopleBlock + memoryBlock },
+        ...historyMsgs.slice(0, lastIdx),
+        multimodalLast,
+      ]
+    } else {
+      conversation = [
+        { role: 'system', content: SYSTEM_PROMPT + peopleBlock + memoryBlock },
+        ...historyMsgs,
+      ]
+    }
 
     const tempId = `temp-${Date.now()}`
     setMessages((prev) => [...prev, {
@@ -710,7 +839,7 @@ export default function Chat() {
           'HTTP-Referer': window.location.origin,
           'X-Title': 'EDEN Robotics',
         },
-        body: JSON.stringify({ model: MODEL, messages: conversation, stream: true }),
+        body: JSON.stringify({ model: image ? VISION_MODEL : MODEL, messages: conversation, stream: true }),
       })
 
       const reader = res.body.getReader()
@@ -823,6 +952,11 @@ export default function Chat() {
 
   return (
     <div className="flex h-screen bg-bg-primary text-white overflow-hidden">
+      <OnboardingModal
+        open={onboardingOpen}
+        user={user}
+        onClose={() => { setOnboardingOpen(false); setMemoryRefresh((n) => n + 1) }}
+      />
 
       {/* Left sidebar */}
       <aside className="w-60 flex-shrink-0 flex flex-col border-r border-white/10 bg-bg-secondary">
@@ -1051,29 +1185,65 @@ export default function Chat() {
                 </SignInButton>
               </div>
             ) : (
-              <div className="flex items-end gap-3 bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus-within:border-cyan-400/30 transition-colors">
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Message #eden-bot  ·  @eden to invoke  ·  / for commands"
-                  rows={1}
-                  disabled={streaming}
-                  className="flex-1 bg-transparent text-sm text-white placeholder:text-white/25 resize-none outline-none leading-relaxed max-h-40 overflow-y-auto"
-                  style={{ minHeight: '24px' }}
-                  onInput={(e) => {
-                    e.target.style.height = 'auto'
-                    e.target.style.height = e.target.scrollHeight + 'px'
-                  }}
-                />
-                <button
-                  onClick={sendMessage}
-                  disabled={!input.trim() || streaming || !isSignedIn}
-                  className="flex-shrink-0 w-8 h-8 rounded-lg bg-white text-black flex items-center justify-center hover:bg-white/90 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-                >
-                  {streaming ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                </button>
+              <div className="flex flex-col gap-2 bg-white/5 border border-white/10 rounded-xl px-4 py-3 focus-within:border-cyan-400/30 transition-colors">
+                {attachedImage && (
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-amber-400/5 border border-amber-400/20">
+                    <img src={attachedImage.dataUrl} alt="preview" className="w-14 h-14 rounded-md object-cover flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-amber-300/80 mb-1">
+                        <Eye size={10} /> perception layer · vision input
+                      </div>
+                      <p className="text-xs text-white/60 truncate">{attachedImage.name}</p>
+                      <p className="text-[10px] text-white/30 font-mono">{attachedImage.w}×{attachedImage.h} · {Math.round(attachedImage.size / 1024)} KB</p>
+                    </div>
+                    <button
+                      onClick={() => setAttachedImage(null)}
+                      className="text-white/40 hover:text-white flex-shrink-0"
+                      title="Remove"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-end gap-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    ref={fileInputRef}
+                    onChange={handleFilePick}
+                    className="hidden"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={streaming || attaching || !!attachedImage}
+                    className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-white/50 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                    title="Attach image (Perception layer)"
+                  >
+                    {attaching ? <Loader2 size={14} className="animate-spin" /> : <Paperclip size={14} />}
+                  </button>
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={handleInputChange}
+                    onKeyDown={handleKeyDown}
+                    placeholder={attachedImage ? '@eden — what do you see?' : 'Message #eden-bot  ·  @eden to invoke  ·  / for commands'}
+                    rows={1}
+                    disabled={streaming}
+                    className="flex-1 bg-transparent text-sm text-white placeholder:text-white/25 resize-none outline-none leading-relaxed max-h-40 overflow-y-auto"
+                    style={{ minHeight: '24px' }}
+                    onInput={(e) => {
+                      e.target.style.height = 'auto'
+                      e.target.style.height = e.target.scrollHeight + 'px'
+                    }}
+                  />
+                  <button
+                    onClick={() => sendMessage()}
+                    disabled={(!input.trim() && !attachedImage) || streaming || !isSignedIn}
+                    className="flex-shrink-0 w-8 h-8 rounded-lg bg-white text-black flex items-center justify-center hover:bg-white/90 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                  >
+                    {streaming ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                  </button>
+                </div>
               </div>
             )}
           </div>

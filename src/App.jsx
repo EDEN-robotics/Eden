@@ -58,6 +58,68 @@ const SectionHeading = ({ number, title, subtitle }) => (
   </div>
 );
 
+const SlideGrid = () => {
+  const BASE = import.meta.env.BASE_URL
+  const slides = [
+    { title: 'What we built',        tag: 'Fall 2025',        img: `${BASE}team/team.jpg`,                     fallback: null,                        section: 'intro' },
+    { title: 'Making it perfect',    tag: 'North Star',       img: `${BASE}robot_body.png`,                    fallback: null,                        section: 'vision' },
+    { title: 'The 5-Layer Pipeline', tag: 'Architecture',     img: `${BASE}supermemory_graph.png`,             fallback: null,                        section: 'architecture' },
+    { title: 'Cognitive memory',     tag: 'Supermemory',      img: `${BASE}supermemory_extraction.png`,        fallback: null,                        section: 'cognitive' },
+    { title: 'Memory graph',         tag: 'Retrieval + decay',img: `${BASE}supermemory_graph.png`,             fallback: null,                        section: 'memory' },
+    { title: 'Gazebo simulation',    tag: 'Sim · Physics',    img: `${BASE}gazebo_1.png`,                      fallback: null,                        section: 'sim' },
+    { title: 'Sim environment',      tag: 'Gazebo world',     img: `${BASE}gazebo_2.png`,                      fallback: null,                        section: 'sim' },
+    { title: 'Navigation trial',     tag: 'Sim · Planning',   img: `${BASE}gazebo_3.png`,                      fallback: null,                        section: 'sim' },
+    { title: '4-Wheeled chassis',    tag: 'Hardware',         img: `${BASE}robot_ackermann.png`,               fallback: null,                        section: 'hardware' },
+    { title: 'Robot internals',      tag: 'Hardware',         img: `${BASE}robot_internal.png`,                fallback: null,                        section: 'hardware' },
+    { title: 'ESP-CAM vision',       tag: 'Perception',       img: `${BASE}robot_espcam.png`,                  fallback: null,                        section: 'perception' },
+    { title: 'Discord bot logs',     tag: 'Cognitive loop',   img: `${BASE}discord_bot_logs.png`,              fallback: null,                        section: 'agent' },
+    { title: 'Discord interactions', tag: 'Agent demo',       img: `${BASE}discord_bot_chat.png`,              fallback: null,                        section: 'agent' },
+  ]
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      {slides.map((s, i) => (
+        <motion.a
+          key={i}
+          href={`${BASE}dr3.html`}
+          target="_blank"
+          rel="noopener noreferrer"
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.45, delay: i * 0.03 }}
+          whileHover={{ y: -4 }}
+          className="group relative aspect-[4/3] rounded-xl overflow-hidden border border-white/10 bg-black hover:border-cyan-400/40 transition-colors"
+        >
+          <img
+            src={s.img}
+            alt={s.title}
+            loading="lazy"
+            onError={(e) => { e.currentTarget.style.opacity = '0.15' }}
+            className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+          <div className="absolute top-2 left-2">
+            <span className="text-[9px] font-mono uppercase tracking-widest px-2 py-0.5 rounded-md bg-black/60 backdrop-blur border border-white/20 text-white/80">
+              {s.section}
+            </span>
+          </div>
+          <div className="absolute bottom-0 left-0 right-0 p-3">
+            <div className="text-[10px] font-mono uppercase tracking-widest text-cyan-300/90 mb-1">{s.tag}</div>
+            <div className="text-sm font-semibold text-white group-hover:text-cyan-200 transition-colors leading-tight">
+              {s.title}
+            </div>
+          </div>
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="w-6 h-6 rounded-full bg-white/90 text-black flex items-center justify-center">
+              <ArrowRight size={12} />
+            </div>
+          </div>
+        </motion.a>
+      ))}
+    </div>
+  )
+}
+
 const AnimatedArchitecture = () => {
   const [activeLayer, setActiveLayer] = useState(0);
   const layers = [
@@ -786,34 +848,24 @@ export default function App() {
           </div>
         </section>
 
-        {/* Slide deck preview */}
+        {/* Slide deck preview — thumbnail grid */}
         <section id="slides" className="py-24">
           <SectionHeading
             number="02.5"
             title="Design Review 3"
-            subtitle="The full EDEN deck — architecture, cognitive layer, hardware, and demos. Presented live."
+            subtitle="The full EDEN deck — architecture, cognitive layer, hardware, and demos. Click any card to open the full deck."
           />
-          <div className="relative rounded-2xl border border-white/10 overflow-hidden bg-black/40 group">
-            <div className="absolute top-4 right-4 z-10 flex gap-2">
-              <a
-                href={`${import.meta.env.BASE_URL}dr3.html`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-widest px-3 py-1.5 rounded-md bg-white/10 backdrop-blur border border-white/20 hover:bg-white/20 text-white transition-colors"
-              >
-                Open fullscreen <ArrowRight size={12} />
-              </a>
-            </div>
-            <iframe
-              src={`${import.meta.env.BASE_URL}dr3.html`}
-              title="EDEN DR3 slide deck"
-              className="w-full aspect-video bg-black"
-              loading="lazy"
-            />
+          <SlideGrid />
+          <div className="mt-8 flex justify-center">
+            <a
+              href={`${import.meta.env.BASE_URL}dr3.html`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-lg bg-white text-black hover:bg-white/90 transition-colors"
+            >
+              Open full deck <ArrowRight size={14} />
+            </a>
           </div>
-          <p className="text-text-dim text-xs mt-4 text-center font-mono">
-            Use arrow keys or click inside the frame to navigate slides · Press <kbd className="px-1.5 py-0.5 bg-white/10 rounded border border-white/20">F</kbd> for fullscreen
-          </p>
         </section>
 
         {/* 4. High-Level Architecture */}
