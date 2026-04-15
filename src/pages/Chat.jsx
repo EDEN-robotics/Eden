@@ -34,7 +34,20 @@ Your architecture:
 
 Personality: warm, curious, technically precise. You are talking with real teammates you genuinely know. Reference specific past exchanges when relevant (your Supermemory layer retrieves them for you). If someone asks "what did I say about X last time" — check the retrieved memory block and answer.
 
-Keep replies under 180 words unless the user asks for detail. Use markdown for lists/code.`
+=== OUTPUT CONTRACT (MANDATORY) ===
+Every response MUST be wrapped in this exact envelope so the chat UI can surface your Planning and Action layers:
+
+[PLAN]
+- <one bullet: what you're about to do, e.g. "recall Joseph's ROS 2 question from yesterday">
+- <one bullet: how you'll frame the response>
+- <optional third bullet>
+[/PLAN]
+[TONE] <one word: empathetic | playful | serious | curious | excited | reassuring> [/TONE]
+[ACTION] <one line: a ROS 2 style action command if the user asked for movement or physical action (e.g. "/cmd_vel linear.x=0.3"), OR the literal word "none" if no physical action is needed> [/ACTION]
+
+<your actual answer to the user in natural language, markdown allowed, under 180 words>
+
+NEVER skip the envelope tags. NEVER put anything outside the envelope + answer. Start your response with [PLAN] on the very first line.`
 
 const OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
 const MODEL = 'nvidia/nemotron-3-super-120b-a12b:free'
@@ -80,6 +93,157 @@ function parseMessageContent(content) {
 
 function buildImageMessageContent(dataUrl, text) {
   return `[img:${dataUrl}]\n\n${text || ''}`
+}
+
+// ───── Envelope parser (Plan / Tone / Action / Answer) ─────
+//
+// Bot responses follow this structured output contract:
+//   [PLAN] ... [/PLAN]
+//   [TONE] ... [/TONE]
+//   [ACTION] ... [/ACTION]
+//   <answer>
+//
+// The parser is streaming-safe — during partial output, it still returns
+// whatever blocks have been completed and the best-guess answer tail.
+
+function parseBotEnvelope(raw) {
+  if (!raw) return { plan: null, tone: null, action: null, answer: '', hasEnvelope: false }
+
+  const planMatch   = raw.match(/\[PLAN\]([\s\S]*?)\[\/PLAN\]/i)
+  const toneMatch   = raw.match(/\[TONE\]([\s\S]*?)\[\/TONE\]/i)
+  const actionMatch = raw.match(/\[ACTION\]([\s\S]*?)\[\/ACTION\]/i)
+
+  const plan = planMatch ? planMatch[1].trim() : null
+  const tone = toneMatch ? toneMatch[1].trim().toLowerCase().replace(/[^a-z]/g, '') : null
+  const action = actionMatch ? actionMatch[1].trim() : null
+
+  // Strip all closed envelope blocks, then also strip any unclosed tail
+  // (happens during streaming before [/…] arrives).
+  let answer = raw
+    .replace(/\[PLAN\][\s\S]*?\[\/PLAN\]/gi, '')
+    .replace(/\[TONE\][\s\S]*?\[\/TONE\]/gi, '')
+    .replace(/\[ACTION\][\s\S]*?\[\/ACTION\]/gi, '')
+    .replace(/\[PLAN\][\s\S]*$/gi, '')
+    .replace(/\[TONE\][\s\S]*$/gi, '')
+    .replace(/\[ACTION\][\s\S]*$/gi, '')
+    .trim()
+
+  const hasEnvelope = !!(plan || tone || action)
+  return { plan, tone, action, answer, hasEnvelope }
+}
+
+const TONE_STYLE = {
+  empathetic: { bg: 'bg-violet-500/15', text: 'text-violet-200', border: 'border-violet-400/30', label: 'empathetic' },
+  playful:    { bg: 'bg-amber-500/15',  text: 'text-amber-200',  border: 'border-amber-400/30',  label: 'playful'    },
+  serious:    { bg: 'bg-slate-500/15',  text: 'text-slate-200',  border: 'border-slate-400/30',  label: 'serious'    },
+  curious:    { bg: 'bg-cyan-500/15',   text: 'text-cyan-200',   border: 'border-cyan-400/30',   label: 'curious'    },
+  excited:    { bg: 'bg-rose-500/15',   text: 'text-rose-200',   border: 'border-rose-400/30',   label: 'excited'    },
+  reassuring: { bg: 'bg-emerald-500/15',text: 'text-emerald-200',border: 'border-emerald-400/30',label: 'reassuring' },
+}
+
+function PlanBlock({ plan }) {
+  const [open, setOpen] = useState(true)
+  if (!plan) return null
+  // Parse bullets
+  const bullets = plan.split('\n').map((l) => l.replace(/^\s*[-*•]\s*/, '').trim()).filter(Boolean)
+  return (
+    <div className="mb-2">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 text-[10px] font-mono uppercase tracking-widest text-emerald-300/80 hover:text-emerald-300 transition-colors"
+      >
+        <Layers size={11} />
+        <span>Planning Layer · {bullets.length} step{bullets.length === 1 ? '' : 's'}</span>
+        <ChevronRight size={10} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="mt-2 pl-4 border-l border-emerald-400/20 space-y-1">
+              {bullets.map((b, i) => (
+                <div key={i} className="flex items-start gap-2 text-[11px] text-white/70">
+                  <span className="text-emerald-300/70 font-mono mt-0.5">{i + 1}.</span>
+                  <span className="leading-relaxed">{b}</span>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function ToneBadge({ tone }) {
+  if (!tone) return null
+  const style = TONE_STYLE[tone] || { bg: 'bg-white/10', text: 'text-white/70', border: 'border-white/20', label: tone }
+  return (
+    <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded uppercase tracking-wider border ${style.bg} ${style.text} ${style.border}`}>
+      {style.label}
+    </span>
+  )
+}
+
+function ActionDispatchToast({ action, onDone }) {
+  useEffect(() => {
+    if (!action) return
+    const t = setTimeout(() => onDone?.(), 4200)
+    return () => clearTimeout(t)
+  }, [action, onDone])
+
+  return (
+    <AnimatePresence>
+      {action && (
+        <motion.div
+          initial={{ opacity: 0, y: -10, x: 10 }}
+          animate={{ opacity: 1, y: 0, x: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          className="fixed top-5 right-5 z-50 max-w-sm"
+        >
+          <div className="rounded-xl border border-rose-400/30 bg-black/90 backdrop-blur-sm shadow-2xl overflow-hidden">
+            <div className="px-4 py-3 flex items-start gap-3">
+              <div className="flex-shrink-0 mt-0.5">
+                <motion.div
+                  animate={{ scale: [1, 1.2, 1] }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                  className="w-7 h-7 rounded-lg bg-rose-500/20 flex items-center justify-center"
+                >
+                  <Cpu size={14} className="text-rose-300" />
+                </motion.div>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-[9px] font-mono uppercase tracking-widest text-rose-300">Action Layer</span>
+                  <span className="text-[9px] font-mono text-white/30">→</span>
+                  <span className="text-[9px] font-mono uppercase tracking-widest text-white/50">ROS 2 dispatch</span>
+                </div>
+                <code className="text-xs font-mono text-white/90 break-all">{action}</code>
+                <div className="mt-2 flex items-center gap-1.5 text-[10px] text-emerald-300/70 font-mono">
+                  <motion.span
+                    className="w-1.5 h-1.5 rounded-full bg-emerald-400"
+                    animate={{ opacity: [0.4, 1, 0.4] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                  />
+                  transmitted · 8ms
+                </div>
+              </div>
+            </div>
+            <motion.div
+              initial={{ scaleX: 1 }}
+              animate={{ scaleX: 0 }}
+              transition={{ duration: 4, ease: 'linear' }}
+              className="h-0.5 bg-rose-400/40 origin-left"
+            />
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  )
 }
 
 // ───── Helpers ─────
@@ -319,9 +483,22 @@ function MemoryChips({ memories }) {
 
 // ───── Message group ─────
 
-function MessageGroup({ messages, isBot, memoriesById }) {
+function MessageGroup({ messages, isBot, memoriesById, onActionFire }) {
   const first = messages[0]
   const name = isBot ? 'EDEN' : first.user_name
+
+  // Parse the envelope on the latest bot message in this group so header
+  // can render the tone and an action toast can fire once.
+  const latestBotEnvelope = isBot ? parseBotEnvelope(messages[messages.length - 1]?.content || '') : null
+
+  useEffect(() => {
+    if (!isBot || !latestBotEnvelope) return
+    const action = latestBotEnvelope.action
+    if (action && action.toLowerCase() !== 'none' && action.length > 0) {
+      onActionFire?.({ msgId: messages[messages.length - 1].id, action })
+    }
+  }, [isBot, latestBotEnvelope?.action, messages[messages.length - 1]?.id])
+
   return (
     <div className="flex gap-3 px-4 py-1 hover:bg-white/[0.02] rounded-lg group">
       <div className="mt-0.5">
@@ -335,6 +512,7 @@ function MessageGroup({ messages, isBot, memoriesById }) {
               cognitive
             </span>
           )}
+          {isBot && latestBotEnvelope?.tone && <ToneBadge tone={latestBotEnvelope.tone} />}
           <span className="text-[11px] text-white/30 opacity-0 group-hover:opacity-100 transition-opacity">
             {formatTime(first.created_at)}
           </span>
@@ -343,9 +521,13 @@ function MessageGroup({ messages, isBot, memoriesById }) {
           {messages.map((msg) => {
             const retrieved = memoriesById?.[msg.id]
             const { image, text } = parseMessageContent(msg.content)
+            // For bot messages, strip the envelope tags before rendering markdown
+            const botEnv = isBot ? parseBotEnvelope(msg.content) : null
+            const displayText = isBot ? (botEnv?.answer || text || msg.content) : text
             return (
               <div key={msg.id} className="text-sm text-white/80 leading-relaxed">
                 {isBot && retrieved && <MemoryChips memories={retrieved} />}
+                {isBot && botEnv?.plan && <PlanBlock plan={botEnv.plan} />}
                 {image && (
                   <div className="mb-2 max-w-md">
                     <a href={image} target="_blank" rel="noopener noreferrer" className="block">
@@ -374,7 +556,7 @@ function MessageGroup({ messages, isBot, memoriesById }) {
                       strong: ({ children }) => <strong className="text-white font-semibold">{children}</strong>,
                     }}
                   >
-                    {text || msg.content}
+                    {displayText}
                   </ReactMarkdown>
                 ) : text ? (
                   <span>
@@ -516,6 +698,8 @@ export default function Chat() {
   const [attachedImage, setAttachedImage] = useState(null) // { dataUrl, w, h, name, size }
   const [attaching, setAttaching] = useState(false)
   const fileInputRef = useRef(null)
+  const [activeAction, setActiveAction] = useState(null) // ROS-2 action dispatch toast
+  const lastFiredActionRef = useRef(null)
 
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
@@ -890,13 +1074,20 @@ export default function Chat() {
           delete next[tempId]
           return next
         })
-        // Also store the bot's response as a memory (channel-wide)
+        // Also store the bot's response as a memory (channel-wide).
+        // Strip envelope so Supermemory only keeps the clean answer.
+        const envelopeParsed = parseBotEnvelope(botContent)
+        const memoryBody = envelopeParsed.answer || botContent
         addMemory({
-          content: botContent,
+          content: memoryBody,
           userId: user.id,
           userName: 'EDEN',
           role: 'assistant',
-          extraMetadata: { replying_to: searchQuery.slice(0, 80) },
+          extraMetadata: {
+            replying_to: searchQuery.slice(0, 80),
+            tone: envelopeParsed.tone || null,
+            action: envelopeParsed.action || null,
+          },
         }).then(() => setMemoryRefresh((n) => n + 1))
       }
     } catch (err) {
@@ -957,6 +1148,7 @@ export default function Chat() {
         user={user}
         onClose={() => { setOnboardingOpen(false); setMemoryRefresh((n) => n + 1) }}
       />
+      <ActionDispatchToast action={activeAction} onDone={() => setActiveAction(null)} />
 
       {/* Left sidebar */}
       <aside className="w-60 flex-shrink-0 flex flex-col border-r border-white/10 bg-bg-secondary">
@@ -1075,7 +1267,16 @@ export default function Chat() {
                 {grouped.map(({ group, isBot, needsDivider, dateLabel }) => (
                   <React.Fragment key={group[0].id}>
                     {needsDivider && <DateDivider label={dateLabel} />}
-                    <MessageGroup messages={group} isBot={isBot} memoriesById={memoriesById} />
+                    <MessageGroup
+                      messages={group}
+                      isBot={isBot}
+                      memoriesById={memoriesById}
+                      onActionFire={({ msgId, action }) => {
+                        if (lastFiredActionRef.current === msgId) return
+                        lastFiredActionRef.current = msgId
+                        setActiveAction(action)
+                      }}
+                    />
                   </React.Fragment>
                 ))}
 
