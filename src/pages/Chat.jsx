@@ -709,26 +709,25 @@ export default function Chat() {
   const typingTimeoutRef = useRef(null)
   const lastTypingBroadcastRef = useRef(0)
 
-  // Sign-in wall
-  if (isLoaded && !isSignedIn) {
-    return (
-      <div className="flex h-screen bg-bg-primary text-white items-center justify-center">
-        <div className="flex flex-col items-center gap-6 text-center px-8">
-          <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center">
-            <span className="text-black font-bold text-xl">E</span>
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold mb-2">EDEN Workspace</h1>
-            <p className="text-white/40 text-sm max-w-xs">Sign in to access the team chat and converse with EDEN's cognitive layer.</p>
-          </div>
-          <SignInButton mode="modal">
-            <button className="bg-white text-black text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-white/90 transition-colors">Sign in</button>
-          </SignInButton>
-          <Link to="/" className="text-xs text-white/25 hover:text-white/50 transition-colors">Back to site</Link>
+  // Precompute sign-in wall JSX; the actual branch happens AFTER all hooks
+  // fire (hooks must run unconditionally to satisfy Rules of Hooks).
+  const signInWall = (
+    <div className="flex h-screen bg-bg-primary text-white items-center justify-center">
+      <div className="flex flex-col items-center gap-6 text-center px-8">
+        <div className="w-14 h-14 rounded-2xl bg-white flex items-center justify-center">
+          <span className="text-black font-bold text-xl">E</span>
         </div>
+        <div>
+          <h1 className="text-xl font-semibold mb-2">EDEN Workspace</h1>
+          <p className="text-white/40 text-sm max-w-xs">Sign in to access the team chat and converse with EDEN's cognitive layer.</p>
+        </div>
+        <SignInButton mode="modal">
+          <button className="bg-white text-black text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-white/90 transition-colors">Sign in</button>
+        </SignInButton>
+        <Link to="/" className="text-xs text-white/25 hover:text-white/50 transition-colors">Back to site</Link>
       </div>
-    )
-  }
+    </div>
+  )
 
   // Open the simulator action bus once so ACTION dispatches reach /sim
   useEffect(() => {
@@ -1148,6 +1147,9 @@ export default function Chat() {
 
   const activeTypers = Object.values(typingUsers)
   const memoryEnabled = supermemoryConfigured()
+
+  // All hooks declared above — now we can branch the render safely
+  if (isLoaded && !isSignedIn) return signInWall
 
   return (
     <div className="flex h-screen bg-bg-primary text-white overflow-hidden">
