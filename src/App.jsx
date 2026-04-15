@@ -39,6 +39,7 @@ const Nav = () => (
       <a href="#roadmap" className="hover:text-white transition-colors">Roadmap</a>
       <a href={`${import.meta.env.BASE_URL}dr3.html`} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Slides</a>
       <Link to="/chat" className="hover:text-white transition-colors">Chat</Link>
+      <Link to="/sim" className="hover:text-white transition-colors">Sim</Link>
       <a href="#github" className="flex items-center gap-2 hover:text-white transition-colors border-l border-white/10 pl-8">
         <Github size={14} /> GitHub
       </a>

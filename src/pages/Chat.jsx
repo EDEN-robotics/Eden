@@ -7,6 +7,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import OnboardingModal from './OnboardingModal'
 import { supabase } from '../lib/supabase'
+import { openSimBusSender } from '../lib/simBridge'
 import {
   addMemory,
   searchMemories,
@@ -700,6 +701,7 @@ export default function Chat() {
   const fileInputRef = useRef(null)
   const [activeAction, setActiveAction] = useState(null) // ROS-2 action dispatch toast
   const lastFiredActionRef = useRef(null)
+  const simBusRef = useRef(null)
 
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
@@ -727,6 +729,12 @@ export default function Chat() {
       </div>
     )
   }
+
+  // Open the simulator action bus once so ACTION dispatches reach /sim
+  useEffect(() => {
+    simBusRef.current = openSimBusSender()
+    return () => simBusRef.current?.close()
+  }, [])
 
   // Perception Layer: capture identity on sign-in (once per user per device)
   useEffect(() => {
@@ -1225,6 +1233,15 @@ export default function Chat() {
               Type <span className="font-mono text-cyan-300/80">@eden</span> to invoke the cognitive layer
             </span>
             <div className="flex-1" />
+            <Link
+              to="/sim"
+              target="_blank"
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-rose-400/30 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20 transition-all"
+              title="Open simulator in new tab"
+            >
+              <Cpu size={13} />
+              Sim
+            </Link>
             <button
               onClick={() => setMemoryPanelOpen(!memoryPanelOpen)}
               className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border transition-all ${memoryPanelOpen ? 'bg-cyan-500/20 border-cyan-400/40 text-cyan-200' : 'border-white/10 text-white/60 hover:border-white/30 hover:text-white'}`}
@@ -1275,6 +1292,7 @@ export default function Chat() {
                         if (lastFiredActionRef.current === msgId) return
                         lastFiredActionRef.current = msgId
                         setActiveAction(action)
+                        simBusRef.current?.broadcast(action, { msgId, source: 'eden' })
                       }}
                     />
                   </React.Fragment>
