@@ -49,8 +49,18 @@ export default function Simulator() {
 
   function applyAction(rawAction, source) {
     const parsed = parseAction(rawAction)
-    setLog((prev) => [{ source, action: rawAction, parsed, ts: Date.now() }, ...prev].slice(0, 40))
-    if (!parsed) return
+    const logEntry = { source, action: rawAction, parsed, ts: Date.now() }
+    setLog((prev) => [logEntry, ...prev].slice(0, 40))
+    console.log('[sim] applyAction', logEntry)
+
+    if (!parsed) {
+      // Unmapped — nudge forward a bit so the demo doesn't look dead
+      const s = stateRef.current
+      s.linVel = 0.15
+      s.angVel = 0
+      s.cmdUntil = performance.now() + 800
+      return
+    }
     const s = stateRef.current
     if (parsed.stop) {
       s.linVel = 0; s.angVel = 0; s.cmdUntil = performance.now() + 100

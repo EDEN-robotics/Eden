@@ -1,41 +1,100 @@
-// Supabase broadcast bridge connecting Chat → Simulator.
-// Every time EDEN emits a non-"none" [ACTION] tag, Chat broadcasts on this
-// channel; the /sim page subscribes and feeds it to the physics engine.
+// Bridge connecting Chat → Simulator across tabs.
+//
+// Uses TWO transports:
+//  1. window localStorage 'storage' events — reliable cross-tab within
+//     the same browser. This is the primary path for the demo flow.
+//  2. Supabase broadcast — covers the cross-device case (two people on
+//     different laptops).
+//
+// Both carry the same payload shape: { action, meta, ts }.
 
 import { supabase } from './supabase'
 
 export const SIM_CHANNEL = 'eden-action-bus'
 export const SIM_EVENT = 'eden-action'
+const LS_KEY = 'eden:action:latest'
 
-// Sentinel channel — callers should hold onto the returned object and call
-// cleanup() on unmount.
+// ───── Sender ─────
 export function openSimBusSender() {
   const channel = supabase.channel(SIM_CHANNEL, { config: { broadcast: { self: false } } })
   let subscribed = false
+  const pending = []
+
   channel.subscribe((status) => {
-    if (status === 'SUBSCRIBED') subscribed = true
+    console.log('[simBridge:sender] supabase status →', status)
+    if (status === 'SUBSCRIBED') {
+      subscribed = true
+      // flush any queued messages
+      while (pending.length) {
+        const p = pending.shift()
+        channel.send({ type: 'broadcast', event: SIM_EVENT, payload: p })
+      }
+    }
   })
+
   return {
     broadcast(action, meta = {}) {
-      if (!subscribed) return false
-      channel.send({
-        type: 'broadcast',
-        event: SIM_EVENT,
-        payload: { action, meta, ts: Date.now() },
-      })
+      const payload = { action, meta, ts: Date.now(), nonce: Math.random().toString(36).slice(2, 10) }
+      console.log('[simBridge:sender] dispatch', payload)
+
+      // Primary transport: localStorage (cross-tab, synchronous, reliable)
+      try {
+        window.localStorage.setItem(LS_KEY, JSON.stringify(payload))
+      } catch (err) {
+        console.warn('[simBridge:sender] localStorage failed:', err)
+      }
+
+      // Secondary transport: supabase broadcast (cross-device)
+      if (subscribed) {
+        channel.send({ type: 'broadcast', event: SIM_EVENT, payload })
+      } else {
+        pending.push(payload)
+      }
       return true
     },
     close() { supabase.removeChannel(channel) },
   }
 }
 
+// ───── Receiver ─────
 export function openSimBusReceiver(onAction) {
+  const seen = new Set() // dedup by nonce (both transports may fire)
+
+  function deliver(payload) {
+    if (!payload?.action) return
+    const id = payload.nonce || `${payload.ts}:${payload.action}`
+    if (seen.has(id)) return
+    seen.add(id)
+    // Garbage-collect old ids
+    if (seen.size > 200) {
+      const arr = Array.from(seen)
+      arr.slice(0, 100).forEach((k) => seen.delete(k))
+    }
+    console.log('[simBridge:receiver] deliver', payload)
+    onAction(payload)
+  }
+
+  // Primary: storage events
+  function onStorage(e) {
+    if (e.key !== LS_KEY || !e.newValue) return
+    try { deliver(JSON.parse(e.newValue)) } catch {}
+  }
+  window.addEventListener('storage', onStorage)
+
+  // Secondary: supabase broadcast
   const channel = supabase.channel(SIM_CHANNEL, { config: { broadcast: { self: false } } })
   channel.on('broadcast', { event: SIM_EVENT }, ({ payload }) => {
-    if (payload?.action) onAction(payload)
+    console.log('[simBridge:receiver] supabase payload', payload)
+    deliver(payload)
   })
-  channel.subscribe()
-  return () => supabase.removeChannel(channel)
+  channel.subscribe((status) => {
+    console.log('[simBridge:receiver] supabase status →', status)
+  })
+
+  return () => {
+    window.removeEventListener('storage', onStorage)
+    supabase.removeChannel(channel)
+  }
 }
 
 // Parser: natural language + ROS-2 style /cmd_vel → { linear, angular, duration, raw }
@@ -98,7 +157,36 @@ export function parseAction(raw) {
     return { linear: 0.25, angular: 0.5, duration: 6.0, raw }
   }
 
-  // fallback — nothing matched
+  // Looser matches for whatever EDEN improvises in [ACTION]
+  if (/\b(drive|move|go|head|navigate|proceed|advance|approach)\b/.test(s)) {
+    if (/\b(back|reverse)\b/.test(s)) {
+      return { linear: -0.3, angular: 0, duration: 2.0, raw }
+    }
+    if (/\bleft\b/.test(s)) {
+      return { linear: 0.25, angular: 0.45, duration: 2.5, raw }
+    }
+    if (/\bright\b/.test(s)) {
+      return { linear: 0.25, angular: -0.45, duration: 2.5, raw }
+    }
+    return { linear: 0.35, angular: 0, duration: 2.5, raw }
+  }
+  if (/\b(look|scan|inspect|observe)\b/.test(s)) {
+    return { linear: 0, angular: 0.6, duration: 3.0, raw }
+  }
+  if (/\b(come|approach|here)\b/.test(s)) {
+    return { linear: 0.3, angular: 0, duration: 2.0, raw }
+  }
+  if (/\bwait\b/.test(s)) {
+    return { linear: 0, angular: 0, duration: 0.1, stop: true, raw }
+  }
+
+  // Last-resort: any directional verb with a number → treat number as duration
+  const durMatch = s.match(/(-?[\d.]+)/)
+  if (durMatch && /\b(second|sec|s)\b/.test(s)) {
+    return { linear: 0.3, angular: 0, duration: parseFloat(durMatch[1]), raw }
+  }
+
+  console.warn('[simBridge] unmapped action:', raw)
   return null
 }
 
