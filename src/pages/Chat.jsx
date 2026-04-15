@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useUser, useClerk, SignInButton } from '@clerk/clerk-react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Hash, Send, Loader2, ArrowLeft, LogOut, LogIn, Brain, Sparkles, ChevronRight, X, AtSign } from 'lucide-react'
+import { Hash, Send, Loader2, ArrowLeft, LogOut, LogIn, Brain, Sparkles, ChevronRight, X, AtSign, Eye, Globe, Layers, Cpu, Zap, Terminal } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { supabase } from '../lib/supabase'
@@ -56,6 +56,127 @@ function mentionsEden(text) {
 function stripMention(text) {
   return text.replace(/@eden\b/gi, '').replace(/\s+/g, ' ').trim()
 }
+
+// ───── Layer pipeline definition ─────
+
+const LAYERS = [
+  { id: 'perception', name: 'Perception', icon: Eye,   color: 'text-amber-300',   bg: 'bg-amber-400/15',   ring: 'ring-amber-400/40',   desc: 'message received' },
+  { id: 'context',    name: 'Context',    icon: Globe, color: 'text-blue-300',    bg: 'bg-blue-400/15',    ring: 'ring-blue-400/40',    desc: 'identity resolved' },
+  { id: 'memory',     name: 'Supermemory',icon: Brain, color: 'text-cyan-300',    bg: 'bg-cyan-400/15',    ring: 'ring-cyan-400/40',    desc: 'recalling history' },
+  { id: 'cognitive',  name: 'Cognitive',  icon: Sparkles, color: 'text-violet-300', bg: 'bg-violet-400/15', ring: 'ring-violet-400/40', desc: 'reasoning' },
+  { id: 'planning',   name: 'Planning',   icon: Layers,color: 'text-emerald-300', bg: 'bg-emerald-400/15', ring: 'ring-emerald-400/40', desc: 'composing response' },
+  { id: 'action',     name: 'Action',     icon: Cpu,   color: 'text-rose-300',    bg: 'bg-rose-400/15',    ring: 'ring-rose-400/40',    desc: 'streaming output' },
+]
+
+function LayerPipeline({ stage }) {
+  // stage: 0..6. 0 = idle, 6 = complete.
+  return (
+    <div className="flex items-center gap-1 px-4 py-2 overflow-x-auto">
+      {LAYERS.map((L, i) => {
+        const Icon = L.icon
+        const active = stage === i + 1
+        const done = stage > i + 1
+        const pending = stage < i + 1
+        return (
+          <React.Fragment key={L.id}>
+            <motion.div
+              initial={false}
+              animate={{
+                scale: active ? 1.05 : 1,
+                opacity: pending ? 0.25 : 1,
+              }}
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-md border flex-shrink-0 ${active ? `${L.bg} ${L.color} border-transparent ring-2 ${L.ring}` : done ? `${L.bg} ${L.color} border-transparent` : 'border-white/10 text-white/40'}`}
+            >
+              <Icon size={10} />
+              <span className="text-[10px] font-mono uppercase tracking-wider">{L.name}</span>
+              {active && (
+                <motion.span
+                  className={`w-1 h-1 rounded-full bg-current`}
+                  animate={{ opacity: [0.3, 1, 0.3] }}
+                  transition={{ duration: 0.8, repeat: Infinity }}
+                />
+              )}
+            </motion.div>
+            {i < LAYERS.length - 1 && (
+              <div className={`h-px w-3 flex-shrink-0 ${stage > i + 1 ? 'bg-white/30' : 'bg-white/10'}`} />
+            )}
+          </React.Fragment>
+        )
+      })}
+    </div>
+  )
+}
+
+// ───── Slash commands ─────
+
+const SLASH_COMMANDS = [
+  { cmd: '/memories', args: '[query]', desc: 'Recall what EDEN remembers', },
+  { cmd: '/whoami',   args: '',        desc: 'What EDEN knows about you' },
+  { cmd: '/layers',   args: '',        desc: 'Architecture overview' },
+  { cmd: '/help',     args: '',        desc: 'List all commands' },
+]
+
+function isSlashCommand(text) {
+  return /^\/[a-z]+/i.test(text.trim())
+}
+
+async function runSlashCommand({ text, user, pushBotMessage }) {
+  const parts = text.trim().split(/\s+/)
+  const cmd = parts[0].toLowerCase()
+  const rest = parts.slice(1).join(' ')
+
+  if (cmd === '/help') {
+    const body = ['**EDEN commands**', '', ...SLASH_COMMANDS.map(c => `- \`${c.cmd}${c.args ? ' ' + c.args : ''}\` — ${c.desc}`)].join('\n')
+    return pushBotMessage(body)
+  }
+
+  if (cmd === '/layers') {
+    const body = [
+      '**EDEN cognitive architecture**',
+      '',
+      '1. **Perception** — vision + audio ingress (Jetson Nano)',
+      '2. **Context** — identity, behavioral cues, situational state',
+      '3. **Supermemory** — persistent recall with decay across sessions',
+      '4. **Cognitive** — distributed reasoning + emotional evaluation',
+      '5. **Planning** — trajectory + social-alignment generation',
+      '6. **Action** — low-latency ROS 2 motion execution',
+      '',
+      'Each message you send lights up the pipeline above the input. Watch it in real time.',
+    ].join('\n')
+    return pushBotMessage(body)
+  }
+
+  if (cmd === '/whoami') {
+    const mems = await searchMemories({ query: user.fullName || user.firstName || 'user', userId: user.id, limit: 8 })
+    if (!mems.length) return pushBotMessage(`I don't have any memories of **${user.fullName || user.firstName}** yet. Say something and I'll start remembering.`)
+    const lines = mems.slice(0, 6).map((m, i) => `${i + 1}. ${m.content.length > 140 ? m.content.slice(0, 140) + '…' : m.content} _(${m.metadata?.ts ? relativeTime(m.metadata.ts) : 'recent'})_`)
+    return pushBotMessage(`**What I remember about ${user.fullName || user.firstName}:**\n\n${lines.join('\n')}`)
+  }
+
+  if (cmd === '/memories') {
+    const q = rest || 'recent conversation'
+    const mems = await searchMemories({ query: q, userId: user.id, limit: 8 })
+    if (!mems.length) return pushBotMessage(`No memories match _"${q}"_. Try a different query or just say something — I'll start remembering.`)
+    const lines = mems.map((m, i) => {
+      const tag = m.source === 'personal' ? '🟣 personal' : '🔵 channel'
+      const who = m.metadata?.user_name || 'someone'
+      const when = m.metadata?.ts ? relativeTime(m.metadata.ts) : 'recent'
+      return `${i + 1}. \`${tag}\` **${who}** _(${when})_ — ${m.content.length > 160 ? m.content.slice(0, 160) + '…' : m.content}`
+    })
+    return pushBotMessage(`**Memories matching _"${q}"_:**\n\n${lines.join('\n')}`)
+  }
+
+  return pushBotMessage(`Unknown command \`${cmd}\`. Type \`/help\` to see what I can do.`)
+}
+
+// ───── Empty-state suggestions ─────
+
+const SUGGESTIONS = [
+  { label: '@eden who are you?', send: '@eden who are you and what can you do?' },
+  { label: '@eden what do you remember about me?', send: '@eden what do you remember about me so far?' },
+  { label: '/layers', send: '/layers' },
+  { label: '/help', send: '/help' },
+]
 
 // ───── Avatars ─────
 
@@ -304,6 +425,7 @@ export default function Chat() {
   const [memoryRefresh, setMemoryRefresh] = useState(0)
   const [memoriesById, setMemoriesById] = useState({}) // bot msg id -> [{content, metadata, score, source}]
   const [retrieving, setRetrieving] = useState(false)
+  const [layerStage, setLayerStage] = useState(0) // 0=idle, 1..6=active layer, 7=done
 
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
@@ -419,10 +541,50 @@ export default function Chat() {
     })
   }
 
-  async function sendMessage() {
-    if (!input.trim() || streaming || !isSignedIn) return
-    const content = input.trim()
-    setInput('')
+  async function pushBotMessage(content, retrievedMemories = null) {
+    const { data: botMsg } = await supabase
+      .from('messages')
+      .insert({
+        user_id: 'eden-bot',
+        user_name: 'EDEN',
+        user_avatar: null,
+        content,
+        role: 'assistant',
+      })
+      .select()
+      .single()
+    if (botMsg) {
+      setMessages((prev) => prev.find((m) => m.id === botMsg.id) ? prev : [...prev, botMsg])
+      if (retrievedMemories) {
+        setMemoriesById((prev) => ({ ...prev, [botMsg.id]: retrievedMemories }))
+      }
+    }
+    return botMsg
+  }
+
+  async function sendMessage(override) {
+    const raw = (override ?? input).trim()
+    if (!raw || streaming || !isSignedIn) return
+    if (!override) setInput('')
+
+    // Slash command fast-path — does not broadcast as user message
+    if (isSlashCommand(raw)) {
+      setStreaming(true)
+      setLayerStage(3) // Supermemory
+      try {
+        await runSlashCommand({ text: raw, user, pushBotMessage })
+      } catch (err) {
+        console.warn('slash command failed:', err)
+        await pushBotMessage(`⚠️ command failed: ${err?.message || 'unknown error'}`)
+      } finally {
+        setLayerStage(7)
+        setTimeout(() => setLayerStage(0), 800)
+        setStreaming(false)
+      }
+      return
+    }
+
+    const content = raw
 
     // Insert user message
     const { data: userMsg } = await supabase
@@ -453,9 +615,17 @@ export default function Chat() {
     setStreaming(true)
     setRetrieving(true)
 
+    // Layer pipeline: Perception → Context → Supermemory
+    setLayerStage(1)
+    await new Promise((r) => setTimeout(r, 180))
+    setLayerStage(2)
+    await new Promise((r) => setTimeout(r, 180))
+    setLayerStage(3)
+
     const searchQuery = stripMention(content) || content
     const retrievedMemories = await searchMemories({ query: searchQuery, userId: user.id, limit: 5 })
     setRetrieving(false)
+    setLayerStage(4) // Cognitive (LLM thinking)
 
     const memoryBlock = formatMemoriesForPrompt(retrievedMemories)
 
@@ -494,6 +664,7 @@ export default function Chat() {
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let botContent = ''
+      let firstToken = true
 
       while (true) {
         const { done, value } = await reader.read()
@@ -507,6 +678,11 @@ export default function Chat() {
             const parsed = JSON.parse(data)
             const delta = parsed.choices?.[0]?.delta?.content
             if (delta) {
+              if (firstToken) {
+                firstToken = false
+                setLayerStage(5) // Planning
+                setTimeout(() => setLayerStage(6), 200) // Action
+              }
               botContent += delta
               setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, content: botContent } : m))
             }
@@ -546,6 +722,8 @@ export default function Chat() {
       console.error('OpenRouter error:', err)
     } finally {
       setStreaming(false)
+      setLayerStage(7)
+      setTimeout(() => setLayerStage(0), 1200)
     }
   }
 
@@ -694,6 +872,17 @@ export default function Chat() {
                   Talk freely — everyone sees the channel. Mention <span className="font-mono text-cyan-300">@eden</span> to pull EDEN into the conversation.
                   EDEN remembers every exchange via its Supermemory layer.
                 </p>
+                <div className="flex flex-wrap justify-center gap-2 mt-4 max-w-md">
+                  {SUGGESTIONS.map((s) => (
+                    <button
+                      key={s.label}
+                      onClick={() => sendMessage(s.send)}
+                      className="px-3 py-1.5 rounded-full border border-white/10 text-xs text-white/60 hover:text-white hover:border-cyan-400/40 hover:bg-cyan-400/5 transition-all font-mono"
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="space-y-0.5">
@@ -734,6 +923,20 @@ export default function Chat() {
             )}
           </div>
 
+          {/* Layer activation pipeline (visible while processing) */}
+          <AnimatePresence>
+            {layerStage > 0 && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="flex-shrink-0 border-t border-white/5 bg-gradient-to-r from-cyan-500/[0.03] via-violet-500/[0.03] to-rose-500/[0.03] overflow-hidden"
+              >
+                <LayerPipeline stage={layerStage} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Typing indicators for humans */}
           <div className="px-6 h-5 flex-shrink-0 flex items-center">
             {activeTypers.length > 0 && (
@@ -760,7 +963,34 @@ export default function Chat() {
           </div>
 
           {/* Input */}
-          <div className="px-6 pb-6 pt-1 flex-shrink-0">
+          <div className="px-6 pb-6 pt-1 flex-shrink-0 relative">
+            {/* Slash command autocomplete */}
+            <AnimatePresence>
+              {input.startsWith('/') && !streaming && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 6 }}
+                  className="absolute left-6 right-6 bottom-full mb-2 rounded-xl border border-cyan-400/20 bg-bg-secondary/95 backdrop-blur shadow-2xl overflow-hidden z-20"
+                >
+                  <div className="px-3 py-2 border-b border-white/5 flex items-center gap-2 text-[10px] font-mono uppercase tracking-widest text-cyan-300/70">
+                    <Terminal size={10} /> Slash commands
+                  </div>
+                  {SLASH_COMMANDS.filter((c) => c.cmd.startsWith(input.split(/\s+/)[0].toLowerCase())).map((c) => (
+                    <button
+                      key={c.cmd}
+                      onClick={() => { setInput(c.cmd + (c.args ? ' ' : '')); inputRef.current?.focus() }}
+                      className="w-full px-4 py-2 flex items-center gap-3 hover:bg-white/5 transition-colors text-left"
+                    >
+                      <code className="text-sm text-cyan-300 font-mono flex-shrink-0">{c.cmd}</code>
+                      {c.args && <span className="text-xs text-white/30 font-mono">{c.args}</span>}
+                      <span className="text-xs text-white/50 ml-auto">{c.desc}</span>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             {!isSignedIn && isLoaded ? (
               <div className="flex items-center justify-center gap-3 py-4 rounded-xl border border-white/10 bg-white/[0.02]">
                 <span className="text-sm text-white/40">Sign in to send messages</span>
@@ -775,7 +1005,7 @@ export default function Chat() {
                   value={input}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyDown}
-                  placeholder="Message #eden-bot — type @eden to invoke the bot"
+                  placeholder="Message #eden-bot  ·  @eden to invoke  ·  / for commands"
                   rows={1}
                   disabled={streaming}
                   className="flex-1 bg-transparent text-sm text-white placeholder:text-white/25 resize-none outline-none leading-relaxed max-h-40 overflow-y-auto"

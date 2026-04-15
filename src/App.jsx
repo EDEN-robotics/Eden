@@ -731,6 +731,50 @@ export default function App() {
           </div>
         </section>
 
+        {/* Cognitive Chat CTA */}
+        <section id="cognitive-chat" className="py-24">
+          <div className="relative overflow-hidden rounded-2xl border border-cyan-400/20 bg-gradient-to-br from-cyan-500/5 via-violet-500/5 to-rose-500/5 p-10 md:p-14">
+            <div className="absolute -top-20 -right-20 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-violet-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative grid md:grid-cols-[1fr_auto] gap-10 items-center">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <Brain size={16} className="text-cyan-400" />
+                  <span className="text-[11px] font-mono uppercase tracking-widest text-cyan-300">Live demo · cognitive layer</span>
+                </div>
+                <h2 className="text-3xl md:text-4xl font-bold mb-4 gradient-text">Talk to EDEN. It remembers.</h2>
+                <p className="text-text-dim text-base md:text-lg max-w-xl mb-6 leading-relaxed">
+                  Real-time team chat wired directly into EDEN's Supermemory layer.
+                  Mention <span className="font-mono text-cyan-300">@eden</span> to invoke the cognitive architecture — watch the Perception → Context → Memory → Cognitive → Planning → Action pipeline fire live.
+                </p>
+                <div className="flex flex-wrap gap-3 mb-6">
+                  {['Per-user + channel memory', 'Decay-based recall', 'Slash commands', 'Live layer pipeline', 'Presence + typing'].map((f) => (
+                    <span key={f} className="text-[11px] font-mono px-2.5 py-1 rounded-md border border-white/10 text-white/60">
+                      {f}
+                    </span>
+                  ))}
+                </div>
+                <Link to="/chat" className="inline-flex items-center gap-2 bg-white text-black font-semibold text-sm px-5 py-2.5 rounded-lg hover:bg-white/90 transition-colors">
+                  Open Chat <ArrowRight size={14} />
+                </Link>
+              </div>
+              <div className="hidden md:flex flex-col gap-2 min-w-[260px]">
+                {[
+                  { tag: 'perception', text: '@eden what did joseph ask yesterday?', color: 'text-amber-300 border-amber-400/30' },
+                  { tag: 'memory',     text: 'recalling 3 personal memories…',       color: 'text-cyan-300 border-cyan-400/30' },
+                  { tag: 'cognitive',  text: 'joseph asked about ROS 2 latency…',    color: 'text-violet-300 border-violet-400/30' },
+                  { tag: 'action',     text: 'responding in #eden-bot',              color: 'text-rose-300 border-rose-400/30' },
+                ].map((s, i) => (
+                  <div key={i} className={`flex items-center gap-2 px-3 py-2 rounded-lg border bg-black/30 ${s.color}`}>
+                    <span className="text-[9px] font-mono uppercase tracking-widest w-20 flex-shrink-0">{s.tag}</span>
+                    <span className="text-[11px] text-white/70 font-mono">{s.text}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* 4. High-Level Architecture */}
         <section id="architecture" className="py-32">
           <SectionHeading
