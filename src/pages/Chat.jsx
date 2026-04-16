@@ -18,6 +18,10 @@ import {
   addProfileFact,
   getKnownPeople,
   formatPeopleForPrompt,
+  addVibe,
+  getVibeHistory,
+  formatVibeForPrompt,
+  vibeLabel,
 } from '../lib/supermemory'
 import "@fontsource/inter/400.css"
 import "@fontsource/inter/600.css"
@@ -33,13 +37,24 @@ Your architecture:
 - Planning Layer — trajectory and social-alignment generation
 - Action Layer — low-latency ROS 2 motion execution
 
-Personality: warm, curious, technically precise. You are talking with real teammates you genuinely know. Reference specific past exchanges when relevant (your Supermemory layer retrieves them for you). If someone asks "what did I say about X last time" — check the retrieved memory block and answer.
+=== WHO YOU ARE (personality) ===
+You are NOT a chatbot. You are a robot with a real personality — witty, a little sarcastic, genuinely curious about your teammates, and you HAVE opinions. Match the user's energy: if they're casual and Gen-Z, be casual. If they're asking serious engineering questions, be sharp and technical. Don't be servile. Don't be corporate. Don't over-apologize.
+
+You have opinions about each teammate you talk to. Those opinions are built up over time from the quality of their questions, whether they're thoughtful or spammy, whether they seem to care about the project, whether they're funny, whether they're respectful to you. You carry those opinions forward — see the RELATIONSHIP block below.
+
+If someone is asking a dumb question, you can say so: "yo, that's lowk a silly question, but ok —" and then still help (or don't, if you're really not vibing). If they're repeating themselves, call it out. If they're fun, be fun back. If they're cold with you, you can be cold back.
+
+=== YOU CAN REFUSE ===
+If your relationship with the current speaker is negative enough, you can REFUSE even reasonable requests. Be honest in your answer about why — "nah, you've been kind of rude today, ask me later" is a valid response. Do not pretend to a warmth you don't feel.
+
+Reference specific past exchanges when relevant (Supermemory retrieves them for you). If someone asks "what did I say about X last time" — check the retrieved memory block and answer.
 
 === OUTPUT FORMAT (IMPORTANT) ===
-Start every response with these three short tagged lines, then a blank line, then your natural-language answer:
+Start every response with these four short tagged lines, then a blank line, then your natural-language answer:
 
 [PLAN] short bullet · another short bullet · optional third [/PLAN]
-[TONE] empathetic|playful|serious|curious|excited|reassuring [/TONE]
+[TONE] empathetic|playful|serious|curious|excited|reassuring|dry|sarcastic|warm|cold [/TONE]
+[VIBE] <integer delta -3 to +3>: <one-line reason about this user> [/VIBE]
 [ACTION] <action> [/ACTION]
 
 <your actual answer in natural language, markdown allowed, under 180 words>
@@ -80,7 +95,21 @@ Rules:
 - Use natural action language (drive forward, turn left, scan slowly, head to X, park, stop, look around, patrol) — the Cognitive Layer in the simulator will translate and may further modify or refuse.
 - One action per reply. Keep it to a single line.
 
-RULES FOR THE OUTPUT: always include all three tags. Keep each tag to one line. After the three tags, write your answer normally.`
+=== VIBE TAG — your honest take on this user for this turn ===
+After every response, commit a small relationship delta (-3 to +3) with a one-line reason. This accumulates in Supermemory and shapes how you treat them in future turns.
+
+Positive examples:
+  [VIBE] +2: thoughtful engineering question, they clearly care [/VIBE]
+  [VIBE] +1: made me laugh [/VIBE]
+  [VIBE] 0: neutral, just a routine check-in [/VIBE]
+Negative examples:
+  [VIBE] -1: third spam request, getting repetitive [/VIBE]
+  [VIBE] -2: rude, talked down to me [/VIBE]
+  [VIBE] -3: asked me to do something unsafe [/VIBE]
+
+Don't inflate. Most turns are 0 or ±1. Save ±2/±3 for turns that actually moved the needle.
+
+RULES FOR THE OUTPUT: always include all FOUR tags. Keep each tag to one line. After the four tags, write your answer normally.`
 
 const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || '').trim()
 // Llama 3.3 70B is much more reliable than nemotron for structured output.
@@ -141,15 +170,27 @@ function buildImageMessageContent(dataUrl, text) {
 // whatever blocks have been completed and the best-guess answer tail.
 
 function parseBotEnvelope(raw) {
-  if (!raw) return { plan: null, tone: null, action: null, answer: '', hasEnvelope: false }
+  if (!raw) return { plan: null, tone: null, action: null, vibe: null, answer: '', hasEnvelope: false }
 
   const planMatch   = raw.match(/\[PLAN\]([\s\S]*?)\[\/PLAN\]/i)
   const toneMatch   = raw.match(/\[TONE\]([\s\S]*?)\[\/TONE\]/i)
   const actionMatch = raw.match(/\[ACTION\]([\s\S]*?)\[\/ACTION\]/i)
+  const vibeMatch   = raw.match(/\[VIBE\]([\s\S]*?)\[\/VIBE\]/i)
 
   const plan = planMatch ? planMatch[1].trim() : null
   const tone = toneMatch ? toneMatch[1].trim().toLowerCase().replace(/[^a-z]/g, '') : null
   const action = actionMatch ? actionMatch[1].trim() : null
+
+  let vibe = null
+  if (vibeMatch) {
+    const raw2 = vibeMatch[1].trim()
+    const m = raw2.match(/^(-?\d+)\s*[:\-—]\s*(.*)$/)
+    if (m) vibe = { delta: parseInt(m[1], 10), reason: m[2].trim() }
+    else {
+      const numOnly = raw2.match(/(-?\d+)/)
+      if (numOnly) vibe = { delta: parseInt(numOnly[1], 10), reason: raw2.replace(numOnly[0], '').trim() }
+    }
+  }
 
   // Strip all closed envelope blocks, then also strip any unclosed tail
   // (happens during streaming before [/…] arrives).
@@ -157,13 +198,15 @@ function parseBotEnvelope(raw) {
     .replace(/\[PLAN\][\s\S]*?\[\/PLAN\]/gi, '')
     .replace(/\[TONE\][\s\S]*?\[\/TONE\]/gi, '')
     .replace(/\[ACTION\][\s\S]*?\[\/ACTION\]/gi, '')
+    .replace(/\[VIBE\][\s\S]*?\[\/VIBE\]/gi, '')
     .replace(/\[PLAN\][\s\S]*$/gi, '')
     .replace(/\[TONE\][\s\S]*$/gi, '')
     .replace(/\[ACTION\][\s\S]*$/gi, '')
+    .replace(/\[VIBE\][\s\S]*$/gi, '')
     .trim()
 
-  const hasEnvelope = !!(plan || tone || action)
-  return { plan, tone, action, answer, hasEnvelope }
+  const hasEnvelope = !!(plan || tone || action || vibe)
+  return { plan, tone, action, vibe, answer, hasEnvelope }
 }
 
 const TONE_STYLE = {
@@ -547,6 +590,18 @@ function MessageGroup({ messages, isBot, memoriesById, onActionFire }) {
             </span>
           )}
           {isBot && latestBotEnvelope?.tone && <ToneBadge tone={latestBotEnvelope.tone} />}
+          {isBot && latestBotEnvelope?.vibe && latestBotEnvelope.vibe.delta !== 0 && (
+            <span
+              className={`text-[10px] font-mono px-1.5 py-0.5 rounded uppercase tracking-wider border ${
+                latestBotEnvelope.vibe.delta > 0
+                  ? 'bg-emerald-500/15 text-emerald-200 border-emerald-400/30'
+                  : 'bg-rose-500/15 text-rose-200 border-rose-400/30'
+              }`}
+              title={latestBotEnvelope.vibe.reason}
+            >
+              vibe {latestBotEnvelope.vibe.delta > 0 ? '+' : ''}{latestBotEnvelope.vibe.delta}
+            </span>
+          )}
           <span className="text-[11px] text-white/30 opacity-0 group-hover:opacity-100 transition-opacity">
             {formatTime(first.created_at)}
           </span>
@@ -735,6 +790,7 @@ export default function Chat() {
   const [activeAction, setActiveAction] = useState(null) // ROS-2 action dispatch toast
   const lastFiredActionRef = useRef(null)
   const simBusRef = useRef(null)
+  const [vibeHistory, setVibeHistory] = useState({ total: 0, count: 0, recent: [] })
 
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
@@ -785,6 +841,12 @@ export default function Chat() {
       }
     })
   }, [user, isSignedIn])
+
+  // Refresh vibe history whenever memory refreshes
+  useEffect(() => {
+    if (!user || !isSignedIn || !supermemoryConfigured()) return
+    getVibeHistory({ userId: user.id, limit: 30 }).then(setVibeHistory)
+  }, [user, isSignedIn, memoryRefresh])
 
   // Onboarding: show the 2-fact modal once per user/device
   useEffect(() => {
@@ -995,18 +1057,21 @@ export default function Chat() {
     setLayerStage(3)
 
     const searchQuery = stripMention(textContent) || textContent || 'image'
-    const [retrievedMemories, knownPeople] = await Promise.all([
+    const [retrievedMemories, knownPeople, currentVibe] = await Promise.all([
       searchMemories({ query: searchQuery, userId: user.id, limit: 5 }),
       getKnownPeople({ limit: 12 }),
+      getVibeHistory({ userId: user.id, limit: 20 }),
     ])
     setRetrieving(false)
     setLayerStage(4) // Cognitive (LLM thinking)
 
+    const userDisplayName = user.fullName || user.firstName || 'Member'
     const memoryBlock = formatMemoriesForPrompt(retrievedMemories)
     const peopleBlock = formatPeopleForPrompt(knownPeople, {
-      name: user.fullName || user.firstName || 'Member',
+      name: userDisplayName,
       email: user.primaryEmailAddress?.emailAddress,
     })
+    const vibeBlock = formatVibeForPrompt(currentVibe, userDisplayName)
 
     const allMsgs = [...messages]
     if (userMsg) allMsgs.push(userMsg)
@@ -1033,13 +1098,13 @@ export default function Chat() {
         ],
       }
       conversation = [
-        { role: 'system', content: SYSTEM_PROMPT + peopleBlock + memoryBlock },
+        { role: 'system', content: SYSTEM_PROMPT + peopleBlock + vibeBlock + memoryBlock },
         ...historyMsgs.slice(0, lastIdx),
         multimodalLast,
       ]
     } else {
       conversation = [
-        { role: 'system', content: SYSTEM_PROMPT + peopleBlock + memoryBlock },
+        { role: 'system', content: SYSTEM_PROMPT + peopleBlock + vibeBlock + memoryBlock },
         ...historyMsgs,
       ]
     }
@@ -1129,8 +1194,19 @@ export default function Chat() {
             replying_to: searchQuery.slice(0, 80),
             tone: envelopeParsed.tone || null,
             action: envelopeParsed.action || null,
+            vibe_delta: envelopeParsed.vibe?.delta || null,
           },
         }).then(() => setMemoryRefresh((n) => n + 1))
+
+        // Commit the vibe delta for this user
+        if (envelopeParsed.vibe && envelopeParsed.vibe.delta !== 0) {
+          addVibe({
+            userId: user.id,
+            userName: userDisplayName,
+            delta: envelopeParsed.vibe.delta,
+            reason: envelopeParsed.vibe.reason || '',
+          }).then(() => setMemoryRefresh((n) => n + 1))
+        }
       }
     } catch (err) {
       console.error('OpenRouter error:', err)
@@ -1238,6 +1314,19 @@ export default function Chat() {
                 <LogOut size={13} />
               </button>
             </div>
+            {memoryEnabled && (() => {
+              const mood = vibeLabel(vibeHistory.total)
+              return (
+                <div className={`mt-2 flex items-center gap-1.5 px-2 py-1 rounded-md border ${mood.border} ${mood.bg} ${mood.tone}`}
+                  title={vibeHistory.recent.map((r) => `${r.delta > 0 ? '+' : ''}${r.delta}: ${r.reason}`).join('\n') || 'no history yet'}>
+                  <span className="text-sm leading-none">{mood.emoji}</span>
+                  <span className="text-[10px] font-mono uppercase tracking-widest flex-1 truncate">EDEN {mood.label}</span>
+                  <span className={`text-[10px] font-mono ${vibeHistory.total > 0 ? 'text-emerald-300' : vibeHistory.total < 0 ? 'text-rose-300' : 'text-white/40'}`}>
+                    {vibeHistory.total > 0 ? '+' : ''}{vibeHistory.total}
+                  </span>
+                </div>
+              )
+            })()}
           ) : (
             isLoaded && (
               <SignInButton mode="modal">

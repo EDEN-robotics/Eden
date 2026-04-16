@@ -264,4 +264,102 @@ export function formatPeopleForPrompt(people, currentUser) {
   return `\n\n=== PEOPLE IN THIS WORKSPACE (from Perception Layer) ===\n${lines.join('\n')}${meLine}\n=== END PEOPLE ===`
 }
 
-export { CHANNEL_TAG, PEOPLE_TAG, relativeTime }
+// ───── Vibe / Relationship layer ─────
+// EDEN carries an opinion about each teammate that evolves across turns.
+// Every interaction can produce a +/- delta with a reason. Deltas live in
+// Supermemory (per user + in a shared vibes container) so they persist.
+
+const VIBE_TAG = 'eden-vibes'
+const VIBE_CLAMP = 10 // soft cap for running totals in the prompt
+
+export async function addVibe({ userId, userName, delta, reason }) {
+  if (!supermemoryConfigured() || !userId) return null
+  const d = Math.max(-5, Math.min(5, Math.round(Number(delta) || 0)))
+  if (d === 0) return null
+  const content = `VIBE ${d > 0 ? '+' : ''}${d} toward ${userName}: ${reason || '(no reason)'}`
+  const metadata = {
+    kind: 'vibe',
+    user_id: userId,
+    user_name: userName,
+    delta: d,
+    reason: reason || '',
+    ts: Date.now(),
+    source: 'cognitive-layer',
+  }
+  try {
+    await Promise.all([
+      fetch(`${API}/memories`, {
+        method: 'POST', headers: authed(),
+        body: JSON.stringify({
+          memories: [{ content, isStatic: false, metadata }],
+          containerTag: userTag(userId),
+        }),
+      }),
+      fetch(`${API}/memories`, {
+        method: 'POST', headers: authed(),
+        body: JSON.stringify({
+          memories: [{ content, isStatic: false, metadata }],
+          containerTag: VIBE_TAG,
+        }),
+      }),
+    ])
+    return { ok: true, delta: d }
+  } catch (err) {
+    console.warn('[supermemory] addVibe failed:', err)
+    return null
+  }
+}
+
+// Fetch every vibe delta EDEN has committed about this user.
+// Returns raw memories AND an aggregate { total, count, recent: [...] }.
+export async function getVibeHistory({ userId, limit = 30 }) {
+  if (!supermemoryConfigured() || !userId) return { total: 0, count: 0, recent: [] }
+  try {
+    const res = await fetch(`${API}/search`, {
+      method: 'POST', headers: authed(),
+      body: JSON.stringify({
+        q: 'vibe relationship opinion',
+        containerTag: userTag(userId),
+        searchMode: 'hybrid',
+        limit,
+      }),
+    })
+    if (!res.ok) return { total: 0, count: 0, recent: [] }
+    const json = await res.json()
+    const rows = (json.results || json.memories || json.data || [])
+      .filter((r) => r.metadata?.kind === 'vibe')
+      .map((r) => ({
+        delta: Number(r.metadata?.delta) || 0,
+        reason: r.metadata?.reason || '',
+        ts: Number(r.metadata?.ts) || 0,
+      }))
+      .sort((a, b) => b.ts - a.ts)
+    const total = rows.reduce((s, r) => s + r.delta, 0)
+    return { total, count: rows.length, recent: rows.slice(0, 8) }
+  } catch (err) {
+    console.warn('[supermemory] getVibeHistory failed:', err)
+    return { total: 0, count: 0, recent: [] }
+  }
+}
+
+export function vibeLabel(total) {
+  if (total >= 6) return { label: 'loves', emoji: '🥰', tone: 'text-emerald-300', border: 'border-emerald-400/30', bg: 'bg-emerald-500/10' }
+  if (total >= 3) return { label: 'likes', emoji: '😊', tone: 'text-emerald-300', border: 'border-emerald-400/30', bg: 'bg-emerald-500/10' }
+  if (total >= 1) return { label: 'warming', emoji: '🙂', tone: 'text-cyan-300', border: 'border-cyan-400/30', bg: 'bg-cyan-500/10' }
+  if (total === 0) return { label: 'neutral', emoji: '😐', tone: 'text-white/60', border: 'border-white/20', bg: 'bg-white/5' }
+  if (total >= -2) return { label: 'uncertain', emoji: '🤨', tone: 'text-amber-300', border: 'border-amber-400/30', bg: 'bg-amber-500/10' }
+  if (total >= -5) return { label: 'annoyed', emoji: '😒', tone: 'text-orange-300', border: 'border-orange-400/30', bg: 'bg-orange-500/10' }
+  return { label: 'done with', emoji: '🙄', tone: 'text-rose-300', border: 'border-rose-400/30', bg: 'bg-rose-500/10' }
+}
+
+export function formatVibeForPrompt(history, userName) {
+  if (!history || history.count === 0) {
+    return `\n\n=== RELATIONSHIP WITH ${userName} (from Supermemory) ===\nNo history yet — this is your first real interaction. Form an honest opinion as you go.\n=== END RELATIONSHIP ===`
+  }
+  const clamped = Math.max(-VIBE_CLAMP, Math.min(VIBE_CLAMP, history.total))
+  const mood = vibeLabel(clamped)
+  const recent = history.recent.slice(0, 6).map((r) => `  ${r.delta > 0 ? '+' : ''}${r.delta}: ${r.reason}`).join('\n')
+  return `\n\n=== RELATIONSHIP WITH ${userName} (from Supermemory) ===\nRunning total: ${clamped} (mood: ${mood.label} ${mood.emoji}) — based on ${history.count} past judgments\nRecent notes:\n${recent}\n\nLet this shape your response. If you genuinely don't vibe with them, you can be dry, sarcastic, or refuse even reasonable requests — be honest about why. If you like them, be warmer. Don't fake a mood you don't have.\n=== END RELATIONSHIP ===`
+}
+
+export { CHANNEL_TAG, PEOPLE_TAG, VIBE_TAG, relativeTime }
