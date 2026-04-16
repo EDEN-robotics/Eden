@@ -38,6 +38,7 @@ const Nav = () => (
       <a href="#walkthrough" className="hover:text-white transition-colors">How it works</a>
       <a href="#roadmap" className="hover:text-white transition-colors">Roadmap</a>
       <a href={`${import.meta.env.BASE_URL}dr3.html`} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Slides</a>
+      <Link to="/architecture" className="hover:text-white transition-colors">Spec</Link>
       <Link to="/chat" className="hover:text-white transition-colors">Chat</Link>
       <Link to="/sim" className="hover:text-white transition-colors">Sim</Link>
       <a href="#github" className="flex items-center gap-2 hover:text-white transition-colors border-l border-white/10 pl-8">

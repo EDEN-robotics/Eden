@@ -9,6 +9,7 @@ import OnboardingModal from './OnboardingModal'
 import TraceDrawer from './TraceDrawer'
 import { supabase } from '../lib/supabase'
 import { openSimBusSender } from '../lib/simBridge'
+import { publish as rosPublish } from '../lib/rosTopics'
 import {
   addMemory,
   searchMemories,
@@ -675,6 +676,60 @@ function MessageGroup({ messages, isBot, memoriesById, onActionFire, traces, onO
   )
 }
 
+// ───── Metrics sparkline ─────
+function Sparkline({ data, color = '#22d3ee', w = 60, h = 18 }) {
+  if (!data || data.length < 2) {
+    return <svg width={w} height={h}><line x1="0" y1={h-1} x2={w} y2={h-1} stroke={color} strokeOpacity="0.25"/></svg>
+  }
+  const max = Math.max(...data)
+  const min = Math.min(...data)
+  const range = Math.max(1, max - min)
+  const step = w / (data.length - 1)
+  const pts = data.map((v, i) => `${i * step},${h - ((v - min) / range) * (h - 2) - 1}`).join(' ')
+  const last = data[data.length - 1]
+  const lastX = (data.length - 1) * step
+  const lastY = h - ((last - min) / range) * (h - 2) - 1
+  return (
+    <svg width={w} height={h}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.25" strokeOpacity="0.85"/>
+      <circle cx={lastX} cy={lastY} r="1.8" fill={color}/>
+    </svg>
+  )
+}
+
+function MetricsStrip({ metrics }) {
+  const last = (arr) => (arr.length ? arr[arr.length - 1] : null)
+  const avg = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null)
+  const M = [
+    { key: 'retrieval', label: 'retrieval',   color: '#22d3ee', fmt: (v) => `${Math.round(v)}ms` },
+    { key: 'ttft',      label: 'TTFT',        color: '#a78bfa', fmt: (v) => `${Math.round(v)}ms` },
+    { key: 'total',     label: 'cog total',   color: '#a78bfa', fmt: (v) => `${(v/1000).toFixed(1)}s` },
+    { key: 'tokens',    label: 'out tokens',  color: '#34d399', fmt: (v) => `${Math.round(v)}` },
+  ]
+  return (
+    <div className="flex items-center gap-4 px-6 py-2 border-b border-white/5 bg-black/20 flex-shrink-0 overflow-x-auto">
+      <span className="text-[9px] font-mono uppercase tracking-widest text-white/30 flex-shrink-0">live metrics · last {Math.max(...M.map((m) => (metrics[m.key] || []).length)) || 0}</span>
+      {M.map((m) => {
+        const data = metrics[m.key] || []
+        const cur = last(data)
+        const a = avg(data)
+        return (
+          <div key={m.key} className="flex items-center gap-2 flex-shrink-0">
+            <span className="text-[9px] font-mono uppercase tracking-widest text-white/40">{m.label}</span>
+            <Sparkline data={data} color={m.color}/>
+            <span className="text-[10px] font-mono" style={{ color: m.color }}>
+              {cur == null ? '—' : m.fmt(cur)}
+            </span>
+            {a != null && (
+              <span className="text-[9px] font-mono text-white/30">μ={m.fmt(a)}</span>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function DateDivider({ label }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
@@ -803,6 +858,7 @@ export default function Chat() {
   const [vibeHistory, setVibeHistory] = useState({ total: 0, count: 0, recent: [] })
   const [traces, setTraces] = useState({}) // msgId -> Trace
   const [openTrace, setOpenTrace] = useState(null)
+  const [metrics, setMetrics] = useState({ retrieval: [], ttft: [], total: [], tokens: [] }) // ring buffers
 
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
@@ -1259,6 +1315,49 @@ export default function Chat() {
         }
         trace.msgId = botMsg.id
         setTraces((prev) => ({ ...prev, [botMsg.id]: trace }))
+
+        // Update rolling metrics (last 30 of each)
+        setMetrics((prev) => {
+          const push = (arr, v) => {
+            if (!isFinite(v)) return arr
+            const next = [...arr, v]
+            return next.length > 30 ? next.slice(next.length - 30) : next
+          }
+          return {
+            retrieval: push(prev.retrieval, trace.retrieval?.durationMs),
+            ttft:      push(prev.ttft,      trace.cognition?.latencyToFirstToken),
+            total:     push(prev.total,     trace.cognition?.latencyTotal),
+            tokens:    push(prev.tokens,    trace.cognition?.outputTokens),
+          }
+        })
+
+        // Publish the trace on the ROS-style topic bus so any subscriber
+        // (e.g. the Sim) can see the cognition that led to this action.
+        rosPublish('/eden/cognition/trace', {
+          _type: 'eden_msgs/Trace',
+          header: { stamp: Date.now(), frame_id: 'eden' },
+          msg_id: botMsg.id,
+          input: trace.input,
+          retrieval: {
+            query: trace.retrieval?.query,
+            durationMs: trace.retrieval?.durationMs,
+            memories: (trace.retrieval?.memories || []).length,
+            people: (trace.retrieval?.people || []).length,
+            vibe_total: trace.retrieval?.vibe?.total ?? null,
+          },
+          cognition: {
+            model: trace.cognition?.model,
+            ttft_ms: trace.cognition?.latencyToFirstToken,
+            total_ms: trace.cognition?.latencyTotal,
+            tokens: trace.cognition?.outputTokens,
+          },
+          planning: {
+            tone: envParsed.tone,
+            vibe_delta: envParsed.vibe?.delta || 0,
+            action: envParsed.action || 'none',
+          },
+          action_dispatched: trace.action.dispatched,
+        })
         // Also store the bot's response as a memory (channel-wide).
         // Strip envelope so Supermemory only keeps the clean answer.
         const envelopeParsed = parseBotEnvelope(botContent)
@@ -1457,6 +1556,9 @@ export default function Chat() {
               Memory
             </button>
           </header>
+
+          {/* Live metrics strip */}
+          <MetricsStrip metrics={metrics} />
 
           {/* Messages */}
           <div className="flex-1 overflow-y-auto py-4 eden-chat-scroll">

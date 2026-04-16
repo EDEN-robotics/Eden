@@ -7,6 +7,7 @@ import App from './App.jsx'
 import Documentation from './pages/Documentation.jsx'
 import Chat from './pages/Chat.jsx'
 import Simulator from './pages/Simulator.jsx'
+import Architecture from './pages/Architecture.jsx'
 
 const PUBLISHABLE_KEY = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
 const hasClerkKey = PUBLISHABLE_KEY && !PUBLISHABLE_KEY.includes('YOUR_KEY_HERE')
@@ -19,6 +20,7 @@ function AppContent() {
         <Route path="/docs/*" element={<Documentation />} />
         <Route path="/chat" element={<Chat />} />
         <Route path="/sim" element={<Simulator />} />
+        <Route path="/architecture" element={<Architecture />} />
       </Routes>
     </BrowserRouter>
   )
