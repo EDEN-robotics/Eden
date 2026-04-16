@@ -116,7 +116,7 @@ function Floor() {
   return (
     <>
       {/* Main ground plane */}
-      <mesh rotation={[-Math.PI/2, 0, 0]} position={[WORLD.w/2, 0, WORLD.h/2]} receiveShadow>
+      <mesh rotation={[-Math.PI/2, 0, 0]} position={[WORLD.w/2, 0, WORLD.h/2]}>
         <planeGeometry args={[WORLD.w, WORLD.h]} />
         <meshStandardMaterial color="#0b1220" roughness={0.9} metalness={0.1} />
       </mesh>
@@ -167,7 +167,7 @@ function Walls() {
 function Obstacles() {
   return OBSTACLES.map((o, i) => (
     <group key={i} position={[o.x, 0, o.y]}>
-      <mesh position={[0, o.height/2, 0]} castShadow receiveShadow>
+      <mesh position={[0, o.height/2, 0]}>
         <boxGeometry args={[o.w, o.height, o.h]} />
         <meshStandardMaterial
           color={o.color || '#5b7392'}
@@ -690,14 +690,10 @@ export default function Simulator() {
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_380px] overflow-hidden">
         {/* 3D World */}
         <div className="relative overflow-hidden">
-          <Canvas shadows camera={{ position: [WORLD.w/2, 18, WORLD.h + 6], fov: 45 }} style={{ background: 'radial-gradient(ellipse at center, #0a1220 0%, #000 85%)' }}>
+          <Canvas camera={{ position: [WORLD.w/2, 18, WORLD.h + 6], fov: 45 }} style={{ background: 'radial-gradient(ellipse at center, #0a1220 0%, #000 85%)' }}>
             <Suspense fallback={null}>
               <ambientLight intensity={0.35} />
-              <directionalLight position={[10, 16, 8]} intensity={0.8} castShadow
-                shadow-mapSize-width={1024} shadow-mapSize-height={1024}
-                shadow-camera-left={-20} shadow-camera-right={20}
-                shadow-camera-top={20} shadow-camera-bottom={-20}
-              />
+              <directionalLight position={[10, 16, 8]} intensity={0.8} />
               <pointLight position={[WORLD.w/2, 8, WORLD.h/2]} intensity={0.3} color="#22e0ff" />
               <fog attach="fog" args={['#050810', 20, 50]} />
 

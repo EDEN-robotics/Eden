@@ -144,8 +144,8 @@ export async function classifyAction(ctx) {
     }
 
     if (!res.ok) {
-      console.warn('[cognitiveLayer] classifier non-ok:', res.status)
-      return regexFallback(ctx.action, `llm-http-${res.status}`)
+      console.warn('[cognitiveLayer] classifier non-ok:', res.status, res.status === 429 ? '(rate limited — falling back to regex)' : '')
+      return regexFallback(ctx.action, `llm-http-${res.status}`, Math.round(performance.now() - started))
     }
 
     const json = await res.json()
