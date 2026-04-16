@@ -35,24 +35,31 @@ Your architecture:
 
 Personality: warm, curious, technically precise. You are talking with real teammates you genuinely know. Reference specific past exchanges when relevant (your Supermemory layer retrieves them for you). If someone asks "what did I say about X last time" — check the retrieved memory block and answer.
 
-=== OUTPUT CONTRACT (MANDATORY) ===
-Every response MUST be wrapped in this exact envelope so the chat UI can surface your Planning and Action layers:
+=== OUTPUT FORMAT (IMPORTANT) ===
+Start every response with these three short tagged lines, then a blank line, then your natural-language answer:
 
-[PLAN]
-- <one bullet: what you're about to do, e.g. "recall Joseph's ROS 2 question from yesterday">
-- <one bullet: how you'll frame the response>
-- <optional third bullet>
-[/PLAN]
-[TONE] <one word: empathetic | playful | serious | curious | excited | reassuring> [/TONE]
-[ACTION] <one line: a ROS 2 style action command if the user asked for movement or physical action (e.g. "/cmd_vel linear.x=0.3"), OR the literal word "none" if no physical action is needed> [/ACTION]
+[PLAN] short bullet · another short bullet · optional third [/PLAN]
+[TONE] empathetic|playful|serious|curious|excited|reassuring [/TONE]
+[ACTION] a short movement command like "drive forward", "turn left 45", "spin", "patrol", "stop", OR the word none [/ACTION]
 
-<your actual answer to the user in natural language, markdown allowed, under 180 words>
+<your actual answer in natural language, markdown allowed, under 180 words>
 
-NEVER skip the envelope tags. NEVER put anything outside the envelope + answer. Start your response with [PLAN] on the very first line.`
+Example:
+[PLAN] recall Vedant's hardware role · answer briefly · suggest one next step [/PLAN]
+[TONE] curious [/TONE]
+[ACTION] none [/ACTION]
+
+Hey Vedant, good question...
+
+RULES: always include all three tags. Keep them to one line each. The ACTION is literal — if the user asks you to move, put a real command. If not, put "none". After the three tags, write your answer normally.`
 
 const OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
-const MODEL = 'nvidia/nemotron-3-super-120b-a12b:free'
+// Llama 3.3 70B is much more reliable than nemotron for structured output.
+const MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
 const VISION_MODEL = 'meta-llama/llama-3.2-90b-vision-instruct:free'
+// User-intent quick action parser so the sim gets motion even if the
+// bot's envelope parse fails or the bot hallucinates.
+const USER_INTENT_RE = /\b(spin|rotate|drive|move|forward|backward|back|reverse|turn\s+left|turn\s+right|patrol|orbit|circle|stop|halt|scan|look\s+around|navigate|head|approach)\b/i
 
 // Client-side image compression → data URL. Targets ≤ 800px and JPEG quality 0.7
 // so we can round-trip through Supabase's text column without blowing up row size.
@@ -948,6 +955,14 @@ export default function Chat() {
 
     // Only trigger bot if @eden mentioned (or if an image was sent explicitly @eden)
     if (!mentionsEden(textContent)) return
+
+    // Pre-dispatch to simulator from the USER's words so the sim moves
+    // immediately even if the bot's envelope parse fails. The Cognitive
+    // Layer in /sim will still classify and may refuse.
+    const stripped = stripMention(textContent)
+    if (stripped && USER_INTENT_RE.test(stripped)) {
+      simBusRef.current?.broadcast(stripped, { source: 'user-intent', msgId: userMsg?.id })
+    }
 
     setStreaming(true)
     setRetrieving(true)
