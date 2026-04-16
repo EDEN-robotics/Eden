@@ -6,6 +6,7 @@ import { Hash, Send, Loader2, ArrowLeft, LogOut, LogIn, Brain, Sparkles, Chevron
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import OnboardingModal from './OnboardingModal'
+import TraceDrawer from './TraceDrawer'
 import { supabase } from '../lib/supabase'
 import { openSimBusSender } from '../lib/simBridge'
 import {
@@ -560,7 +561,7 @@ function MemoryChips({ memories }) {
 
 // ───── Message group ─────
 
-function MessageGroup({ messages, isBot, memoriesById, onActionFire }) {
+function MessageGroup({ messages, isBot, memoriesById, onActionFire, traces, onOpenTrace }) {
   const first = messages[0]
   const name = isBot ? 'EDEN' : first.user_name
 
@@ -601,6 +602,15 @@ function MessageGroup({ messages, isBot, memoriesById, onActionFire }) {
             >
               vibe {latestBotEnvelope.vibe.delta > 0 ? '+' : ''}{latestBotEnvelope.vibe.delta}
             </span>
+          )}
+          {isBot && traces && traces[messages[messages.length - 1]?.id] && (
+            <button
+              onClick={() => onOpenTrace?.(traces[messages[messages.length - 1].id])}
+              className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded border border-white/15 text-white/60 hover:text-cyan-200 hover:border-cyan-400/40 transition-colors"
+              title="Open full pipeline trace"
+            >
+              trace ↗
+            </button>
           )}
           <span className="text-[11px] text-white/30 opacity-0 group-hover:opacity-100 transition-opacity">
             {formatTime(first.created_at)}
@@ -791,6 +801,8 @@ export default function Chat() {
   const lastFiredActionRef = useRef(null)
   const simBusRef = useRef(null)
   const [vibeHistory, setVibeHistory] = useState({ total: 0, count: 0, recent: [] })
+  const [traces, setTraces] = useState({}) // msgId -> Trace
+  const [openTrace, setOpenTrace] = useState(null)
 
   const bottomRef = useRef(null)
   const inputRef = useRef(null)
@@ -1049,6 +1061,28 @@ export default function Chat() {
     setStreaming(true)
     setRetrieving(true)
 
+    // Start the trace for this turn
+    const turnStartTs = Date.now()
+    const trace = {
+      msgId: null, // filled in when bot message is inserted
+      turnStartTs,
+      input: {
+        role: 'user',
+        userId: user.id,
+        userName: user.fullName || user.firstName || 'Member',
+        email: user.primaryEmailAddress?.emailAddress,
+        text: textContent,
+        hasMention: true,
+        image: image ? true : false,
+        imageInfo: attachedImage ? { w: attachedImage.w, h: attachedImage.h, size: attachedImage.size } : null,
+      },
+      context: {},
+      retrieval: {},
+      prompt: {},
+      cognition: {},
+      action: {},
+    }
+
     // Layer pipeline: Perception → Context → Supermemory
     setLayerStage(1)
     await new Promise((r) => setTimeout(r, 180))
@@ -1057,11 +1091,13 @@ export default function Chat() {
     setLayerStage(3)
 
     const searchQuery = stripMention(textContent) || textContent || 'image'
+    const retrievalStart = performance.now()
     const [retrievedMemories, knownPeople, currentVibe] = await Promise.all([
       searchMemories({ query: searchQuery, userId: user.id, limit: 5 }),
       getKnownPeople({ limit: 12 }),
       getVibeHistory({ userId: user.id, limit: 20 }),
     ])
+    const retrievalEnd = performance.now()
     setRetrieving(false)
     setLayerStage(4) // Cognitive (LLM thinking)
 
@@ -1072,6 +1108,19 @@ export default function Chat() {
       email: user.primaryEmailAddress?.emailAddress,
     })
     const vibeBlock = formatVibeForPrompt(currentVibe, userDisplayName)
+
+    // Fill retrieval frame in trace
+    trace.retrieval = {
+      query: searchQuery,
+      limit: 5,
+      durationMs: retrievalEnd - retrievalStart,
+      memories: retrievedMemories,
+      people: knownPeople,
+      vibe: currentVibe,
+    }
+    trace.context = {
+      identityKnown: true,
+    }
 
     const allMsgs = [...messages]
     if (userMsg) allMsgs.push(userMsg)
@@ -1109,6 +1158,18 @@ export default function Chat() {
       ]
     }
 
+    // Prompt stats
+    const systemContent = conversation[0]?.content || ''
+    const totalChars = conversation.reduce((s, m) => s + (typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length), 0)
+    trace.prompt = {
+      systemChars: systemContent.length,
+      systemTokens: Math.ceil(systemContent.length / 4),
+      historyCount: conversation.length - 1,
+      totalChars,
+      totalTokens: Math.ceil(totalChars / 4),
+      systemPreview: systemContent.slice(0, 2000),
+    }
+
     const tempId = `temp-${Date.now()}`
     setMessages((prev) => [...prev, {
       id: tempId,
@@ -1120,6 +1181,9 @@ export default function Chat() {
       role: 'assistant',
     }])
     setMemoriesById((prev) => ({ ...prev, [tempId]: retrievedMemories }))
+    trace.msgId = tempId
+    trace.cognition.model = image ? VISION_MODEL : MODEL
+    const cognitionStart = performance.now()
 
     try {
       const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -1152,6 +1216,7 @@ export default function Chat() {
             if (delta) {
               if (firstToken) {
                 firstToken = false
+                trace.cognition.latencyToFirstToken = performance.now() - cognitionStart
                 setLayerStage(5) // Planning
                 setTimeout(() => setLayerStage(6), 200) // Action
               }
@@ -1161,6 +1226,9 @@ export default function Chat() {
           } catch { /* ignore */ }
         }
       }
+      trace.cognition.latencyTotal = performance.now() - cognitionStart
+      trace.cognition.outputChars = botContent.length
+      trace.cognition.outputTokens = Math.ceil(botContent.length / 4)
 
       const { data: botMsg } = await supabase
         .from('messages')
@@ -1181,6 +1249,16 @@ export default function Chat() {
           delete next[tempId]
           return next
         })
+        // Finalize the trace under the persisted bot msg id
+        const envParsed = parseBotEnvelope(botContent)
+        trace.cognition.envelope = envParsed
+        trace.action = {
+          raw: envParsed.action || null,
+          dispatched: !!(envParsed.action && envParsed.action.toLowerCase() !== 'none'),
+          dispatchMs: 4, // constant for broadcast bus
+        }
+        trace.msgId = botMsg.id
+        setTraces((prev) => ({ ...prev, [botMsg.id]: trace }))
         // Also store the bot's response as a memory (channel-wide).
         // Strip envelope so Supermemory only keeps the clean answer.
         const envelopeParsed = parseBotEnvelope(botContent)
@@ -1270,6 +1348,7 @@ export default function Chat() {
         onClose={() => { setOnboardingOpen(false); setMemoryRefresh((n) => n + 1) }}
       />
       <ActionDispatchToast action={activeAction} onDone={() => setActiveAction(null)} />
+      {openTrace && <TraceDrawer trace={openTrace} onClose={() => setOpenTrace(null)} />}
 
       {/* Left sidebar */}
       <aside className="w-60 flex-shrink-0 flex flex-col border-r border-white/10 bg-bg-secondary">
@@ -1300,33 +1379,35 @@ export default function Chat() {
 
         <div className="px-3 py-4 border-t border-white/10">
           {isLoaded && isSignedIn ? (
-            <div className="flex items-center gap-2">
-              <Avatar name={user.fullName || user.firstName} imageUrl={user.imageUrl} size={7} />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold truncate">{user.fullName || user.firstName}</p>
-                <p className="text-[10px] text-white/40 truncate">{user.primaryEmailAddress?.emailAddress}</p>
-              </div>
-              <button
-                onClick={() => signOut({ redirectUrl: 'https://eden-robotics.github.io/Eden/' })}
-                className="text-white/30 hover:text-white/70 transition-colors"
-                title="Sign out"
-              >
-                <LogOut size={13} />
-              </button>
-            </div>
-            {memoryEnabled && (() => {
-              const mood = vibeLabel(vibeHistory.total)
-              return (
-                <div className={`mt-2 flex items-center gap-1.5 px-2 py-1 rounded-md border ${mood.border} ${mood.bg} ${mood.tone}`}
-                  title={vibeHistory.recent.map((r) => `${r.delta > 0 ? '+' : ''}${r.delta}: ${r.reason}`).join('\n') || 'no history yet'}>
-                  <span className="text-sm leading-none">{mood.emoji}</span>
-                  <span className="text-[10px] font-mono uppercase tracking-widest flex-1 truncate">EDEN {mood.label}</span>
-                  <span className={`text-[10px] font-mono ${vibeHistory.total > 0 ? 'text-emerald-300' : vibeHistory.total < 0 ? 'text-rose-300' : 'text-white/40'}`}>
-                    {vibeHistory.total > 0 ? '+' : ''}{vibeHistory.total}
-                  </span>
+            <>
+              <div className="flex items-center gap-2">
+                <Avatar name={user.fullName || user.firstName} imageUrl={user.imageUrl} size={7} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold truncate">{user.fullName || user.firstName}</p>
+                  <p className="text-[10px] text-white/40 truncate">{user.primaryEmailAddress?.emailAddress}</p>
                 </div>
-              )
-            })()}
+                <button
+                  onClick={() => signOut({ redirectUrl: 'https://eden-robotics.github.io/Eden/' })}
+                  className="text-white/30 hover:text-white/70 transition-colors"
+                  title="Sign out"
+                >
+                  <LogOut size={13} />
+                </button>
+              </div>
+              {memoryEnabled && (() => {
+                const mood = vibeLabel(vibeHistory.total)
+                return (
+                  <div className={`mt-2 flex items-center gap-1.5 px-2 py-1 rounded-md border ${mood.border} ${mood.bg} ${mood.tone}`}
+                    title={vibeHistory.recent.map((r) => `${r.delta > 0 ? '+' : ''}${r.delta}: ${r.reason}`).join('\n') || 'no history yet'}>
+                    <span className="text-sm leading-none">{mood.emoji}</span>
+                    <span className="text-[10px] font-mono uppercase tracking-widest flex-1 truncate">EDEN {mood.label}</span>
+                    <span className={`text-[10px] font-mono ${vibeHistory.total > 0 ? 'text-emerald-300' : vibeHistory.total < 0 ? 'text-rose-300' : 'text-white/40'}`}>
+                      {vibeHistory.total > 0 ? '+' : ''}{vibeHistory.total}
+                    </span>
+                  </div>
+                )
+              })()}
+            </>
           ) : (
             isLoaded && (
               <SignInButton mode="modal">
@@ -1414,6 +1495,8 @@ export default function Chat() {
                       messages={group}
                       isBot={isBot}
                       memoriesById={memoriesById}
+                      traces={traces}
+                      onOpenTrace={setOpenTrace}
                       onActionFire={({ msgId, action }) => {
                         if (lastFiredActionRef.current === msgId) return
                         lastFiredActionRef.current = msgId
