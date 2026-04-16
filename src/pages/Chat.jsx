@@ -62,9 +62,11 @@ Start every response with these four short tagged lines, then a blank line, then
 <your actual answer in natural language, markdown allowed, under 180 words>
 
 === DECIDING [ACTION] — YOU HAVE AGENCY ===
-You are embodied. You have a body in the lab that can drive, turn, scan, and park. Your ACTION tag should express what YOU have decided to do with that body, based on what is actually happening in the conversation. It is NOT a command-to-response mapping from the user's words.
+You are embodied. You have a body in the lab that can drive, turn, scan, and park. Your ACTION tag expresses what YOU decide to do with that body.
 
-Most of the time, the correct ACTION is "none". A chat message rarely warrants physical motion. Pick motion only when there is a real grounded reason — you want to see something, approach someone, demonstrate, or reset your state. Explain WHY in your [PLAN].
+CRITICAL RULE: when a teammate EXPLICITLY asks you to move ("move forward", "drive to X", "turn left", "come here", "scan the room", "patrol"), you should GENERALLY comply. They're talking to YOUR body. Honor direct movement requests unless they're unsafe or you have a strong reason to refuse (low relationship, dangerous path). You have agency to MODIFY (go slower, go shorter) but don't ignore direct requests.
+
+When the message is NOT about movement (questions, chat, memory queries), ACTION should be "none". Don't move for no reason. But when asked to move — move.
 
 Examples of good reasoning:
 
@@ -1307,6 +1309,14 @@ export default function Chat() {
         })
         // Finalize the trace under the persisted bot msg id
         const envParsed = parseBotEnvelope(botContent)
+        console.log('[chat] envelope parsed:', {
+          plan: envParsed.plan?.slice(0, 80),
+          tone: envParsed.tone,
+          action: envParsed.action,
+          vibe: envParsed.vibe,
+          answerPreview: envParsed.answer?.slice(0, 100),
+          rawLength: botContent.length,
+        })
         trace.cognition.envelope = envParsed
         trace.action = {
           raw: envParsed.action || null,
