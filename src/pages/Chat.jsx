@@ -53,7 +53,7 @@ Hey Vedant, good question...
 
 RULES: always include all three tags. Keep them to one line each. The ACTION is literal — if the user asks you to move, put a real command. If not, put "none". After the three tags, write your answer normally.`
 
-const OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
+const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || '').trim()
 // Llama 3.3 70B is much more reliable than nemotron for structured output.
 const MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
 const VISION_MODEL = 'meta-llama/llama-3.2-90b-vision-instruct:free'

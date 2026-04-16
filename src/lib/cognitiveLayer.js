@@ -8,7 +8,7 @@
 
 import { parseAction } from './simBridge'
 
-const OPENROUTER_KEY = import.meta.env.VITE_OPENROUTER_API_KEY
+const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || '').trim()
 // Small & fast for a decision loop. Free-tier OpenRouter.
 const CLASSIFIER_MODEL = 'google/gemini-2.0-flash-exp:free'
 const FALLBACK_MODEL = 'meta-llama/llama-3.3-70b-instruct:free'

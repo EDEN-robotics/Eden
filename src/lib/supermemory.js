@@ -3,7 +3,7 @@
 // personal context ("what vedan said last week") and collective context.
 
 const API = 'https://api.supermemory.ai/v4'
-const KEY = import.meta.env.VITE_SUPERMEMORY_API_KEY
+const KEY = (import.meta.env.VITE_SUPERMEMORY_API_KEY || '').trim()
 
 const CHANNEL_TAG = 'eden-channel-eden-bot'
 
