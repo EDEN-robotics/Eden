@@ -50,15 +50,40 @@ Your reason should sound like a thinking robot, not a parser. e.g. "I want to se
 
 ONLY output the JSON object. No prose, no markdown fence.`
 
+// Extract a JSON object from mixed text. Reasoning models (Nemotron, R1)
+// emit chain-of-thought prose that may contain multiple JSON-like fragments.
+// We scan for all balanced {..} substrings, prefer one containing "decision",
+// then longest, and try to parse in that order.
 function extractJson(text) {
   if (!text) return null
-  // Strip markdown fences if present
-  const cleaned = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
-  // Find first { ... last }
-  const first = cleaned.indexOf('{')
-  const last = cleaned.lastIndexOf('}')
-  if (first < 0 || last < 0) return null
-  try { return JSON.parse(cleaned.slice(first, last + 1)) } catch { return null }
+  const cleaned = text.replace(/```(?:json)?\s*/gi, '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+  const candidates = []
+  let depth = 0, start = -1
+  for (let i = 0; i < cleaned.length; i++) {
+    const ch = cleaned[i]
+    if (ch === '{') {
+      if (depth === 0) start = i
+      depth++
+    } else if (ch === '}') {
+      depth--
+      if (depth === 0 && start >= 0) {
+        candidates.push(cleaned.slice(start, i + 1))
+        start = -1
+      } else if (depth < 0) {
+        depth = 0
+      }
+    }
+  }
+  candidates.sort((a, b) => {
+    const aHas = a.includes('"decision"') ? 1 : 0
+    const bHas = b.includes('"decision"') ? 1 : 0
+    if (aHas !== bHas) return bHas - aHas
+    return b.length - a.length
+  })
+  for (const c of candidates) {
+    try { return JSON.parse(c) } catch { /* try next */ }
+  }
+  return null
 }
 
 function clampNumber(v, min, max, fallback = null) {

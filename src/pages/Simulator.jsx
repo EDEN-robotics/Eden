@@ -970,22 +970,12 @@ export default function Simulator() {
       }
       const recipientUser = recipient ? usersRef.current.find((u) => u.id === recipient.id) : null
 
-      // Run the cognitive gate on the compound intent — EDEN can still refuse
-      setThinking({ action: rawAction, source })
-      const obstacles = OBSTACLES.map((o) => ({ ...o, dist: Math.hypot(o.x - s.x, o.y - s.y), reachable: lineOfSight(costmapRef.current, { x: s.x, y: s.y }, { x: o.x, y: o.y }) })).filter((o) => o.dist < 10).sort((a, b) => a.dist - b.dist)
-      const history = latestLog.slice(0, 4).map((l) => ({ source: l.source, action: l.action, decision: l.decision }))
-      const goal = { label: `${item.label}${recipientUser ? ` → ${recipientUser.name}` : ''}`, x: item.x, y: item.y, dist: Math.hypot(item.x - s.x, item.y - s.y), blocked: !lineOfSight(costmapRef.current, { x: s.x, y: s.y }, { x: item.x, y: item.y }) }
-      const res = await classifyAction({
-        action: rawAction,
-        robot: { x: s.x, y: s.y, heading: s.heading, linVel: s.linVel, angVel: s.angVel },
-        obstacles, npcs: latestNpcs, history,
-        chatCtx, goal, battery: latestBat,
-      })
-      setThinking(null)
-      setLlmLatency((p) => [...p, res.ms].slice(-20))
-      const entry = { ts, source, action: rawAction, decision: res.decision, reason: res.reason, linear: res.linear, angular: res.angular, duration: res.duration, model: res.model, ms: res.ms, goal: goal.label }
+      // Task intents are already authored by the Chat LLM (with full context,
+      // vibe, relationship). No need to re-classify — skip the cognitive gate
+      // and execute. Safety bumper + A* replan still enforce physical safety.
+      const goalLabel = `${item.label}${recipientUser ? ` → ${recipientUser.name}` : ''}`
+      const entry = { ts, source, action: rawAction, decision: 'execute', reason: `task-SM: fetch ${item.label}${recipientUser ? ` for ${recipientUser.name}` : ''}`, model: 'task-sm', ms: 0, goal: goalLabel }
       setLog((p) => [entry, ...p].slice(0, 50))
-      if (res.decision === 'refuse') return
 
       // Start the task state machine
       startFetchTask({ item, recipientUser })

@@ -36,6 +36,24 @@ export const PROVIDERS = OPENROUTER_KEY ? [
     key: OPENROUTER_KEY,
     referer: true,
   },
+  // Paid Gemini — last-resort fallback. Kicks in when both free models
+  // return empty/rate-limited. Reliable, fast, expensive ($).
+  {
+    name: 'or-gemini-2.5-pro',
+    kind: 'openai',
+    url: OR_URL,
+    model: 'google/gemini-2.5-pro',
+    key: OPENROUTER_KEY,
+    referer: true,
+  },
+  {
+    name: 'or-gemini-2.5-flash',
+    kind: 'openai',
+    url: OR_URL,
+    model: 'google/gemini-2.5-flash',
+    key: OPENROUTER_KEY,
+    referer: true,
+  },
 ] : []
 
 // Vision chain. Nemotron-3-super is text-only; Nemotron Nano 2 VL handles
