@@ -120,6 +120,11 @@ const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || '').trim()
 // Llama 3.3 70B is much more reliable than nemotron for structured output.
 const MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
 const VISION_MODEL = 'meta-llama/llama-3.2-90b-vision-instruct:free'
+// Fallback chain when the primary returns empty (free-tier rate-limit hiccups)
+const FALLBACK_MODELS = [
+  'google/gemini-2.0-flash-exp:free',
+  'meta-llama/llama-3.1-8b-instruct:free',
+]
 
 // Client-side image compression → data URL. Targets ≤ 800px and JPEG quality 0.7
 // so we can round-trip through Supabase's text column without blowing up row size.
@@ -1251,49 +1256,69 @@ export default function Chat() {
     const cognitionStart = performance.now()
 
     try {
-      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENROUTER_KEY}`,
-          'HTTP-Referer': window.location.origin,
-          'X-Title': 'EDEN Robotics',
-        },
-        body: JSON.stringify({ model: image ? VISION_MODEL : MODEL, messages: conversation, stream: true }),
-      })
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
+      const primary = image ? VISION_MODEL : MODEL
+      const modelChain = [primary, ...FALLBACK_MODELS.filter((m) => m !== primary)]
       let botContent = ''
-      let firstToken = true
+      let modelUsed = primary
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        const chunk = decoder.decode(value)
-        const lines = chunk.split('\n').filter((l) => l.startsWith('data: '))
-        for (const line of lines) {
-          const data = line.slice(6)
-          if (data === '[DONE]') continue
-          try {
-            const parsed = JSON.parse(data)
-            const delta = parsed.choices?.[0]?.delta?.content
-            if (delta) {
-              if (firstToken) {
-                firstToken = false
-                trace.cognition.latencyToFirstToken = performance.now() - cognitionStart
-                setLayerStage(5) // Planning
-                setTimeout(() => setLayerStage(6), 200) // Action
-              }
-              botContent += delta
-              setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, content: botContent } : m))
-            }
-          } catch { /* ignore */ }
+      for (const tryModel of modelChain) {
+        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OPENROUTER_KEY}`,
+            'HTTP-Referer': window.location.origin,
+            'X-Title': 'EDEN Robotics',
+          },
+          body: JSON.stringify({ model: tryModel, messages: conversation, stream: true, max_tokens: 600, temperature: 0.85 }),
+        })
+
+        if (!res.ok) {
+          console.warn(`[chat] model ${tryModel} returned ${res.status}; trying next`)
+          continue
         }
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let firstToken = true
+        let thisContent = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          const chunk = decoder.decode(value)
+          const lines = chunk.split('\n').filter((l) => l.startsWith('data: '))
+          for (const line of lines) {
+            const data = line.slice(6)
+            if (data === '[DONE]') continue
+            try {
+              const parsed = JSON.parse(data)
+              const delta = parsed.choices?.[0]?.delta?.content
+              if (delta) {
+                if (firstToken) {
+                  firstToken = false
+                  trace.cognition.latencyToFirstToken = performance.now() - cognitionStart
+                  setLayerStage(5) // Planning
+                  setTimeout(() => setLayerStage(6), 200) // Action
+                }
+                thisContent += delta
+                setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, content: thisContent } : m))
+              }
+            } catch { /* ignore */ }
+          }
+        }
+        if (thisContent.trim().length > 0) {
+          botContent = thisContent
+          modelUsed = tryModel
+          break
+        }
+        console.warn(`[chat] model ${tryModel} returned empty stream; trying next`)
       }
+
       trace.cognition.latencyTotal = performance.now() - cognitionStart
       trace.cognition.outputChars = botContent.length
       trace.cognition.outputTokens = Math.ceil(botContent.length / 4)
+      trace.cognition.model = modelUsed
 
       const { data: botMsg } = await supabase
         .from('messages')
