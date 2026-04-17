@@ -820,7 +820,6 @@ export default function Simulator() {
   const [thoughts, setThoughts] = useState([])        // autonomous-loop thought stream
   const [llmLatency, setLlmLatency] = useState([])    // last ~20 ms samples
   const [pathPreview, setPathPreview] = useState([])  // for 3D overlay
-  const [showChat, setShowChat] = useState(true)      // inline chat panel for one-screen demo
   const [itemsState, setItemsState] = useState(ITEMS.map((it) => ({ ...it })))
   const [inventory, setInventory] = useState([])      // items currently held by EDEN
   const [usersState, setUsersState] = useState(TEAM.map((p) => ({ id: p.id, name: p.name, role: p.role, color: p.color, x: p.seat.x, y: p.seat.y })))
@@ -1438,37 +1437,6 @@ export default function Simulator() {
           </div>
 
           <Minimap stateRef={stateRef} costmapRef={costmapRef} pathPreview={pathPreview} itemsState={itemsState} usersState={usersState} />
-
-          {/* Inline chat panel — the one-screen demo */}
-          {showChat && (
-            <div className="absolute bottom-3 right-3 w-[420px] h-[540px] rounded-xl border border-white/20 bg-black/70 backdrop-blur overflow-hidden shadow-2xl flex flex-col pointer-events-auto">
-              <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-black/60">
-                <Brain size={12} className="text-cyan-300" />
-                <span className="text-[11px] font-mono uppercase tracking-widest text-cyan-300">chat · cognitive loop</span>
-                <span className="text-[9px] font-mono text-emerald-300 ml-auto flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> live bus
-                </span>
-                <button
-                  onClick={() => setShowChat(false)}
-                  className="ml-1 text-white/50 hover:text-white text-[10px] font-mono uppercase tracking-widest"
-                >hide</button>
-              </div>
-              <iframe
-                src={`${import.meta.env.BASE_URL}chat?embed=1`}
-                title="EDEN chat"
-                className="flex-1 w-full border-0 bg-black"
-                allow="clipboard-read; clipboard-write"
-              />
-            </div>
-          )}
-          {!showChat && (
-            <button
-              onClick={() => setShowChat(true)}
-              className="absolute bottom-3 right-3 px-3 py-2 rounded-lg border border-white/20 bg-black/70 backdrop-blur text-[11px] font-mono uppercase tracking-widest text-cyan-300 hover:border-cyan-400/50 pointer-events-auto"
-            >
-              <Brain size={12} className="inline -mt-0.5 mr-1.5" /> open chat
-            </button>
-          )}
 
           <AnimatePresence>
             {thinking && (
