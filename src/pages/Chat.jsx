@@ -212,6 +212,13 @@ function buildImageMessageContent(dataUrl, text) {
 function parseBotEnvelope(raw) {
   if (!raw) return { plan: null, tone: null, action: null, vibe: null, answer: '', hasEnvelope: false }
 
+  // Strip reasoning-model preambles. Reasoning models (Nemotron, DeepSeek-R1)
+  // sometimes emit chain-of-thought as prose before the first envelope tag.
+  // Also strip common reasoning fences: <think>..</think>, [Thinking]..[/Thinking].
+  raw = raw.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/\[THINKING\][\s\S]*?\[\/THINKING\]/gi, '')
+  const firstTagIdx = raw.search(/\[(PLAN|TONE|ACTION|VIBE)\]/i)
+  if (firstTagIdx > 0) raw = raw.slice(firstTagIdx)
+
   const planMatch   = raw.match(/\[PLAN\]([\s\S]*?)\[\/PLAN\]/i)
   const toneMatch   = raw.match(/\[TONE\]([\s\S]*?)\[\/TONE\]/i)
   const actionMatch = raw.match(/\[ACTION\]([\s\S]*?)\[\/ACTION\]/i)

@@ -23,9 +23,10 @@ export const PROVIDERS = OPENROUTER_KEY ? [
     model: 'nvidia/nemotron-3-super-120b-a12b:free',
     key: OPENROUTER_KEY,
     referer: true,
-    // Nemotron is a reasoning model — without this, it dumps chain-of-thought
-    // into the completion stream and pollutes the envelope output.
-    extraBody: { reasoning: { exclude: true } },
+    // Nemotron is a reasoning model that sometimes emits chain-of-thought
+    // as prose before the envelope. The parser strips anything before the
+    // first `[PLAN]/[TONE]/[ACTION]/[VIBE]` tag, so no request-body tweak
+    // is needed (and `reasoning.exclude:true` makes it return empty).
   },
   {
     name: 'or-llama-70b',
