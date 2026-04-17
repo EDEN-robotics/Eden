@@ -908,13 +908,21 @@ export default function Simulator() {
         publish('/task_status', { _type: 'eden/TaskStatus', kind: 'drop', item: item.id, at: { x: dropX, y: dropY } })
         return
       }
-      // Fetch: resolve recipient
+      // Fetch: resolve recipient. Priority:
+      //  1. Explicit "__speaker__" (from "get me the X") → chat speaker
+      //  2. Explicit name captured by regex
+      //  3. Full-text scan — LLM might phrase it compound ("get X and go to Y")
+      //  4. Nothing → no delivery, just fetch
       let recipient = null
       if (intent.recipient === '__speaker__') {
-        // Find team member by chat speaker name
         if (chatCtx?.speaker) recipient = findTeammate(chatCtx.speaker)
       } else if (intent.recipient) {
         recipient = findTeammate(intent.recipient)
+      }
+      if (!recipient) {
+        // Fallback: scan the full action text (minus the item word) for a team name
+        const scanText = rawAction.toLowerCase().replace(new RegExp(`\\b${item.label}\\b`, 'g'), ' ')
+        recipient = findTeammate(scanText)
       }
       const recipientUser = recipient ? usersRef.current.find((u) => u.id === recipient.id) : null
 

@@ -111,17 +111,28 @@ export function parseTaskIntent(raw) {
   const drop = s.match(/\b(drop|put down|release)\b\s+(?:the\s+)?([a-z _-]+?)(?:\s|$|[,.!?])/)
   if (drop) return { kind: 'drop', item: drop[2].trim() }
 
+  // Compound two-step: "get/pick up/grab/fetch X AND bring/give/hand/deliver/take [it] to Y"
+  //                   "get X THEN bring [it] to Y"      (optional "it"/"them")
+  const compound = s.match(/\b(get|grab|fetch|pick up|pickup)\b\s+(?:the\s+)?([a-z _-]+?)(?:\s+and\s+|\s*,?\s*then\s+)(?:bring|hand|give|deliver|take|drop\s+(?:it|them)\s+off|go\s+(?:to|over\s+to))\s*(?:it|them|off)?\s*(?:to|for|at|over\s+to)?\s*([a-z _-]+?)(?:\s|$|[,.!?])/)
+  if (compound) return { kind: 'fetch', item: compound[2].trim(), recipient: compound[3].trim() }
+
+  // Also accept "get X and go to Y" / "get X then go to Y" — interpret as deliver
+  const goCompound = s.match(/\b(get|grab|fetch|pick up|pickup)\b\s+(?:the\s+)?([a-z _-]+?)(?:\s+and\s+|\s*,?\s*then\s+)(?:go|head|drive|walk)\s+(?:to|over\s+to|toward)\s+([a-z _-]+?)(?:\s|$|[,.!?])/)
+  if (goCompound) return { kind: 'fetch', item: goCompound[2].trim(), recipient: goCompound[3].trim() }
+
   // Bring/hand/give/deliver X to Y
   const bring = s.match(/\b(bring|hand|give|deliver|take)\b\s+(?:the\s+)?([a-z _-]+?)\s+(?:to|for)\s+([a-z _-]+?)(?:\s|$|[,.!?])/)
   if (bring) return { kind: 'fetch', item: bring[2].trim(), recipient: bring[3].trim() }
 
-  // Get/grab/fetch/pick up X  (optional "for Y"), and "get me the X" / "hand me the X"
+  // "get me the X" / "hand me the X" / "bring me the X"
   const getMe = s.match(/\b(get|grab|fetch|hand|bring)\b\s+(me|myself)\s+(?:the\s+)?([a-z _-]+?)(?:\s|$|[,.!?])/)
   if (getMe) return { kind: 'fetch', item: getMe[3].trim(), recipient: '__speaker__' }
 
+  // "get X for Y"
   const getFor = s.match(/\b(get|grab|fetch|pick up|bring)\b\s+(?:the\s+)?([a-z _-]+?)\s+for\s+([a-z _-]+?)(?:\s|$|[,.!?])/)
   if (getFor) return { kind: 'fetch', item: getFor[2].trim(), recipient: getFor[3].trim() }
 
+  // Plain "get the X" / "pick up X"
   const getOnly = s.match(/\b(get|grab|fetch|pick up)\b\s+(?:the\s+)?([a-z _-]+?)(?:\s|$|[,.!?])/)
   if (getOnly) return { kind: 'fetch', item: getOnly[2].trim() }
 
