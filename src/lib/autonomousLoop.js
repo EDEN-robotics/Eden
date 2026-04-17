@@ -4,9 +4,7 @@
 // Returns { thought, action, goal_add, goal_done, post_to_chat, reason }
 // All fields optional so EDEN can simply observe.
 
-const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || '').trim()
-const MODEL = 'google/gemini-2.0-flash-exp:free'
-const FALLBACK = 'meta-llama/llama-3.3-70b-instruct:free'
+import { chatOneShot, hasAnyLLM } from './llm'
 
 const SYSTEM = `You are the autonomous loop of EDEN — an embodied robot in a lab. You are NOT responding to anyone. You are alone with your thoughts and you tick every ~20 seconds.
 
@@ -66,41 +64,15 @@ function extractJson(text) {
 }
 
 export async function autonomousTick(ctx) {
-  if (!OPENROUTER_KEY) return null
-  const body = {
-    model: MODEL,
+  if (!hasAnyLLM()) return null
+  const { text, error } = await chatOneShot({
     messages: [
       { role: 'system', content: SYSTEM },
       { role: 'user', content: buildUserPrompt(ctx) },
     ],
-    response_format: { type: 'json_object' },
     temperature: 0.4,
-  }
-  try {
-    let res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENROUTER_KEY}`,
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
-        'X-Title': 'EDEN Autonomous Loop',
-      },
-      body: JSON.stringify(body),
-    })
-    if (!res.ok && res.status === 400) {
-      const { response_format, ...noJson } = body
-      res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${OPENROUTER_KEY}` },
-        body: JSON.stringify({ ...noJson, model: FALLBACK }),
-      })
-    }
-    if (!res.ok) return null
-    const json = await res.json()
-    const text = json.choices?.[0]?.message?.content || ''
-    return extractJson(text)
-  } catch (err) {
-    console.warn('[autonomousLoop] tick failed:', err)
-    return null
-  }
+    max_tokens: 300,
+  })
+  if (error || !text) return null
+  return extractJson(text)
 }

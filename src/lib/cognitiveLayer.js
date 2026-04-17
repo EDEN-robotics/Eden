@@ -7,11 +7,7 @@
 // `linear`/`angular`/`duration` are null when decision === 'refuse'.
 
 import { parseAction } from './simBridge'
-
-const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || '').trim()
-// Small & fast for a decision loop. Free-tier OpenRouter.
-const CLASSIFIER_MODEL = 'google/gemini-2.0-flash-exp:free'
-const FALLBACK_MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
+import { chatOneShot, hasAnyLLM } from './llm'
 
 const LIN_MIN = -0.5, LIN_MAX = 0.5
 const ANG_MIN = -1.2, ANG_MAX = 1.2
@@ -122,80 +118,43 @@ Decide now. Output only the JSON object.`
 }
 
 export async function classifyAction(ctx) {
-  if (!OPENROUTER_KEY) {
-    // No LLM available — fall straight through to regex
+  if (!hasAnyLLM()) {
     return regexFallback(ctx.action, 'llm-unavailable')
   }
 
-  const body = {
-    model: CLASSIFIER_MODEL,
+  const { text, model, ms, error } = await chatOneShot({
     messages: [
       { role: 'system', content: SYSTEM },
       { role: 'user', content: buildUserPrompt(ctx) },
     ],
-    response_format: { type: 'json_object' },
     temperature: 0.2,
+    max_tokens: 300,
+  })
+
+  if (error || !text) {
+    return regexFallback(ctx.action, error || 'empty-output', ms)
   }
 
-  const started = performance.now()
-  try {
-    let res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENROUTER_KEY}`,
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
-        'X-Title': 'EDEN Cognitive Layer',
-      },
-      body: JSON.stringify(body),
-    })
+  const parsed = extractJson(text)
+  if (!parsed || !parsed.decision) {
+    console.warn('[cognitiveLayer] bad json, falling back. raw:', text)
+    return regexFallback(ctx.action, 'llm-bad-json', ms)
+  }
 
-    // Some free models don't accept response_format — retry without it
-    if (!res.ok && res.status === 400) {
-      const { response_format, ...noJson } = body
-      res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${OPENROUTER_KEY}`,
-        },
-        body: JSON.stringify({ ...noJson, model: FALLBACK_MODEL }),
-      })
-    }
+  const decision = ['execute', 'modify', 'refuse'].includes(parsed.decision) ? parsed.decision : 'execute'
+  const linear = decision === 'refuse' ? null : clampNumber(parsed.linear, LIN_MIN, LIN_MAX, 0)
+  const angular = decision === 'refuse' ? null : clampNumber(parsed.angular, ANG_MIN, ANG_MAX, 0)
+  const duration = decision === 'refuse' ? null : clampNumber(parsed.duration, DUR_MIN, DUR_MAX, 2)
 
-    if (!res.ok) {
-      console.warn('[cognitiveLayer] classifier non-ok:', res.status, res.status === 429 ? '(rate limited — falling back to regex)' : '')
-      return regexFallback(ctx.action, `llm-http-${res.status}`, Math.round(performance.now() - started))
-    }
-
-    const json = await res.json()
-    const text = json.choices?.[0]?.message?.content || ''
-    const parsed = extractJson(text)
-    const ms = Math.round(performance.now() - started)
-
-    if (!parsed || !parsed.decision) {
-      console.warn('[cognitiveLayer] bad json, falling back. raw:', text)
-      return regexFallback(ctx.action, 'llm-bad-json', ms)
-    }
-
-    const decision = ['execute', 'modify', 'refuse'].includes(parsed.decision) ? parsed.decision : 'execute'
-    const linear = decision === 'refuse' ? null : clampNumber(parsed.linear, LIN_MIN, LIN_MAX, 0)
-    const angular = decision === 'refuse' ? null : clampNumber(parsed.angular, ANG_MIN, ANG_MAX, 0)
-    const duration = decision === 'refuse' ? null : clampNumber(parsed.duration, DUR_MIN, DUR_MAX, 2)
-
-    return {
-      decision,
-      linear,
-      angular,
-      duration,
-      reason: String(parsed.reason || '').slice(0, 200) || '(no reason given)',
-      model: CLASSIFIER_MODEL,
-      ms,
-      raw: ctx.action,
-    }
-  } catch (err) {
-    console.warn('[cognitiveLayer] classifier threw:', err)
-    return regexFallback(ctx.action, 'llm-threw', Math.round(performance.now() - started))
+  return {
+    decision,
+    linear,
+    angular,
+    duration,
+    reason: String(parsed.reason || '').slice(0, 200) || '(no reason given)',
+    model,
+    ms,
+    raw: ctx.action,
   }
 }
 

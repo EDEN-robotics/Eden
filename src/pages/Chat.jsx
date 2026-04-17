@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase'
 import { openSimBusSender } from '../lib/simBridge'
 import { publish as rosPublish } from '../lib/rosTopics'
 import { teamPromptBlock } from '../lib/teamSeeds'
+import { chatStreaming } from '../lib/llm'
 import {
   addMemory,
   searchMemories,
@@ -1256,64 +1257,20 @@ export default function Chat() {
     const cognitionStart = performance.now()
 
     try {
-      const primary = image ? VISION_MODEL : MODEL
-      const modelChain = [primary, ...FALLBACK_MODELS.filter((m) => m !== primary)]
-      let botContent = ''
-      let modelUsed = primary
-
-      for (const tryModel of modelChain) {
-        const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${OPENROUTER_KEY}`,
-            'HTTP-Referer': window.location.origin,
-            'X-Title': 'EDEN Robotics',
-          },
-          body: JSON.stringify({ model: tryModel, messages: conversation, stream: true, max_tokens: 600, temperature: 0.85 }),
-        })
-
-        if (!res.ok) {
-          console.warn(`[chat] model ${tryModel} returned ${res.status}; trying next`)
-          continue
-        }
-
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let firstToken = true
-        let thisContent = ''
-
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          const chunk = decoder.decode(value)
-          const lines = chunk.split('\n').filter((l) => l.startsWith('data: '))
-          for (const line of lines) {
-            const data = line.slice(6)
-            if (data === '[DONE]') continue
-            try {
-              const parsed = JSON.parse(data)
-              const delta = parsed.choices?.[0]?.delta?.content
-              if (delta) {
-                if (firstToken) {
-                  firstToken = false
-                  trace.cognition.latencyToFirstToken = performance.now() - cognitionStart
-                  setLayerStage(5) // Planning
-                  setTimeout(() => setLayerStage(6), 200) // Action
-                }
-                thisContent += delta
-                setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, content: thisContent } : m))
-              }
-            } catch { /* ignore */ }
-          }
-        }
-        if (thisContent.trim().length > 0) {
-          botContent = thisContent
-          modelUsed = tryModel
-          break
-        }
-        console.warn(`[chat] model ${tryModel} returned empty stream; trying next`)
-      }
+      const { text: botContent, model: modelUsed } = await chatStreaming({
+        messages: conversation,
+        vision: !!image,
+        temperature: 0.85,
+        max_tokens: 600,
+        onFirstToken: () => {
+          trace.cognition.latencyToFirstToken = performance.now() - cognitionStart
+          setLayerStage(5) // Planning
+          setTimeout(() => setLayerStage(6), 200) // Action
+        },
+        onDelta: (_, full) => {
+          setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, content: full } : m))
+        },
+      })
 
       trace.cognition.latencyTotal = performance.now() - cognitionStart
       trace.cognition.outputChars = botContent.length
