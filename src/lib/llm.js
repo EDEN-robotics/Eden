@@ -23,6 +23,9 @@ export const PROVIDERS = OPENROUTER_KEY ? [
     model: 'nvidia/nemotron-3-super-120b-a12b:free',
     key: OPENROUTER_KEY,
     referer: true,
+    // Nemotron is a reasoning model — without this, it dumps chain-of-thought
+    // into the completion stream and pollutes the envelope output.
+    extraBody: { reasoning: { exclude: true } },
   },
   {
     name: 'or-llama-70b',
@@ -178,7 +181,7 @@ export async function chatOneShot({ messages, temperature = 0.7, max_tokens = 60
         const res = await fetch(p.url, {
           method: 'POST',
           headers: buildHeaders(p),
-          body: JSON.stringify({ model: p.model, messages, temperature, max_tokens }),
+          body: JSON.stringify({ model: p.model, messages, temperature, max_tokens, ...(p.extraBody || {}) }),
           signal,
         })
         if (!res.ok) { error = `status_${res.status}` }
@@ -212,7 +215,7 @@ export async function chatStreaming({ messages, temperature = 0.85, max_tokens =
         const res = await fetch(p.url, {
           method: 'POST',
           headers: buildHeaders(p),
-          body: JSON.stringify({ model: p.model, messages, temperature, max_tokens, stream: true }),
+          body: JSON.stringify({ model: p.model, messages, temperature, max_tokens, stream: true, ...(p.extraBody || {}) }),
           signal,
         })
         if (!res.ok) {

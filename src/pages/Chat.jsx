@@ -1223,12 +1223,14 @@ export default function Chat() {
     setLayerStage(4) // Cognitive (LLM thinking)
 
     const userDisplayName = user.fullName || user.firstName || 'Member'
+    const userFirstName = (user.firstName || userDisplayName.split(' ')[0] || 'member').toLowerCase()
     const memoryBlock = formatMemoriesForPrompt(retrievedMemories)
     const peopleBlock = formatPeopleForPrompt(knownPeople, {
       name: userDisplayName,
       email: user.primaryEmailAddress?.emailAddress,
     })
     const vibeBlock = formatVibeForPrompt(currentVibe, userDisplayName)
+    const speakerBlock = `\n\n=== CURRENT SPEAKER (PIN THIS) ===\nThe person talking to you RIGHT NOW is **${userDisplayName}** (first name: ${userFirstName}${user.primaryEmailAddress?.emailAddress ? ', email: ' + user.primaryEmailAddress.emailAddress : ''}).\nWhen you reference "me" in your answer, it's them.\nWhen you emit [ACTION] tags that need a person (e.g. "charge at X", "bring the pencil to X"), use the name "${userFirstName}" unless the message clearly targets a different teammate. Do NOT ask who is speaking — you already know.`
     const addressedBlock = addressed
       ? `\n\n=== DIRECTLY ADDRESSED ===\n${userDisplayName} used @eden or sent you an image. Engage normally — this is a direct request to you.`
       : `\n\n=== NOT DIRECTLY ADDRESSED ===\n${userDisplayName} did NOT @mention you. You are overhearing the team chat. Only chime in if you have something genuinely worth saying — a reaction, a technical correction, a joke that lands, or an observation that adds value. Most overheard messages deserve zero response.\n\nEXCEPTION: if the message is directed AT you (insults, calling you out by name, questioning you, trash-talking you) — you ARE effectively addressed. Respond normally, with attitude if warranted. Social intelligence = knowing when someone's talking about/to you even without the @.\n\nTo stay silent, emit the four envelope tags (PLAN/TONE/VIBE/ACTION) on their own lines, then end immediately. Do NOT write any prose after the tags. An empty body means 'I heard, I'm choosing not to speak.' We will suppress empty replies from the UI so you appear invisible.\n\nIf you DO speak, keep it short — one or two lines max. You're jumping into an existing conversation, not monologuing.`
@@ -1271,13 +1273,13 @@ export default function Chat() {
         ],
       }
       conversation = [
-        { role: 'system', content: SYSTEM_PROMPT + '\n\n' + teamPromptBlock() + peopleBlock + vibeBlock + memoryBlock + addressedBlock },
+        { role: 'system', content: SYSTEM_PROMPT + '\n\n' + teamPromptBlock() + speakerBlock + peopleBlock + vibeBlock + memoryBlock + addressedBlock },
         ...historyMsgs.slice(0, lastIdx),
         multimodalLast,
       ]
     } else {
       conversation = [
-        { role: 'system', content: SYSTEM_PROMPT + '\n\n' + teamPromptBlock() + peopleBlock + vibeBlock + memoryBlock + addressedBlock },
+        { role: 'system', content: SYSTEM_PROMPT + '\n\n' + teamPromptBlock() + speakerBlock + peopleBlock + vibeBlock + memoryBlock + addressedBlock },
         ...historyMsgs,
       ]
     }
