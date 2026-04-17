@@ -97,6 +97,37 @@ export function openSimBusReceiver(onAction) {
   }
 }
 
+// Task-intent parser — recognizes higher-level compound actions like
+//   "get the pencil"       → { kind: 'fetch', item }
+//   "bring the pencil to joseph"  → { kind: 'fetch', item, recipient }
+//   "hand me the screwdriver"     → { kind: 'fetch', item, recipient: '__speaker__' }
+//   "drop the pencil"             → { kind: 'drop', item }
+// Returns null if the text is not a task — callers fall through to parseAction().
+export function parseTaskIntent(raw) {
+  if (!raw) return null
+  const s = String(raw).toLowerCase().trim()
+
+  // Drop patterns: "drop the pencil" / "put down the X"
+  const drop = s.match(/\b(drop|put down|release)\b\s+(?:the\s+)?([a-z _-]+?)(?:\s|$|[,.!?])/)
+  if (drop) return { kind: 'drop', item: drop[2].trim() }
+
+  // Bring/hand/give/deliver X to Y
+  const bring = s.match(/\b(bring|hand|give|deliver|take)\b\s+(?:the\s+)?([a-z _-]+?)\s+(?:to|for)\s+([a-z _-]+?)(?:\s|$|[,.!?])/)
+  if (bring) return { kind: 'fetch', item: bring[2].trim(), recipient: bring[3].trim() }
+
+  // Get/grab/fetch/pick up X  (optional "for Y"), and "get me the X" / "hand me the X"
+  const getMe = s.match(/\b(get|grab|fetch|hand|bring)\b\s+(me|myself)\s+(?:the\s+)?([a-z _-]+?)(?:\s|$|[,.!?])/)
+  if (getMe) return { kind: 'fetch', item: getMe[3].trim(), recipient: '__speaker__' }
+
+  const getFor = s.match(/\b(get|grab|fetch|pick up|bring)\b\s+(?:the\s+)?([a-z _-]+?)\s+for\s+([a-z _-]+?)(?:\s|$|[,.!?])/)
+  if (getFor) return { kind: 'fetch', item: getFor[2].trim(), recipient: getFor[3].trim() }
+
+  const getOnly = s.match(/\b(get|grab|fetch|pick up)\b\s+(?:the\s+)?([a-z _-]+?)(?:\s|$|[,.!?])/)
+  if (getOnly) return { kind: 'fetch', item: getOnly[2].trim() }
+
+  return null
+}
+
 // Parser: natural language + ROS-2 style /cmd_vel → { linear, angular, duration, raw }
 // Returns null if nothing parseable.
 export function parseAction(raw) {

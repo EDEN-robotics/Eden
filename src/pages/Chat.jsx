@@ -10,6 +10,7 @@ import TraceDrawer from './TraceDrawer'
 import { supabase } from '../lib/supabase'
 import { openSimBusSender } from '../lib/simBridge'
 import { publish as rosPublish } from '../lib/rosTopics'
+import { teamPromptBlock } from '../lib/teamSeeds'
 import {
   addMemory,
   searchMemories,
@@ -1211,13 +1212,13 @@ export default function Chat() {
         ],
       }
       conversation = [
-        { role: 'system', content: SYSTEM_PROMPT + peopleBlock + vibeBlock + memoryBlock },
+        { role: 'system', content: SYSTEM_PROMPT + '\n\n' + teamPromptBlock() + peopleBlock + vibeBlock + memoryBlock },
         ...historyMsgs.slice(0, lastIdx),
         multimodalLast,
       ]
     } else {
       conversation = [
-        { role: 'system', content: SYSTEM_PROMPT + peopleBlock + vibeBlock + memoryBlock },
+        { role: 'system', content: SYSTEM_PROMPT + '\n\n' + teamPromptBlock() + peopleBlock + vibeBlock + memoryBlock },
         ...historyMsgs,
       ]
     }

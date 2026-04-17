@@ -5,13 +5,15 @@ import { OrbitControls, Html, Grid, Environment, PerspectiveCamera } from '@reac
 import { motion, AnimatePresence } from 'framer-motion'
 import * as THREE from 'three'
 import { Cpu, ArrowLeft, Play, Pause, Wifi, Send, Brain, X, Check, Radar, Activity, Radio, Box as BoxIcon, Orbit } from 'lucide-react'
-import { openSimBusReceiver } from '../lib/simBridge'
+import { openSimBusReceiver, parseTaskIntent } from '../lib/simBridge'
 import { classifyAction } from '../lib/cognitiveLayer'
 import { publish, listTopics, Twist, Odometry, LaserScan, TFMessage } from '../lib/rosTopics'
 import { createCostmap } from '../lib/costmap'
 import { planPath, lineOfSight } from '../lib/pathPlanner'
 import { clipForSafety, STOP_DIST, SLOW_DIST } from '../lib/safetyBumper'
 import { autonomousTick } from '../lib/autonomousLoop'
+import { TEAM, findTeammate } from '../lib/teamSeeds'
+import { ITEMS, findItem, ITEM_DROP_HEIGHT } from '../lib/worldItems'
 import "@fontsource/jetbrains-mono"
 
 // ───── World ─────
@@ -225,6 +227,137 @@ function Obstacles() {
       </group>
     )
   })
+}
+
+// ───── Pickable items ─────
+function ItemMesh({ item }) {
+  const k = item.kind
+  if (k === 'stick') {
+    return (
+      <mesh position={[0, 0.02, 0]} rotation={[0, 0, Math.PI/2]} castShadow>
+        <cylinderGeometry args={[item.r, item.r, item.len, 10]} />
+        <meshStandardMaterial color={item.color} roughness={0.6} metalness={0.3} />
+      </mesh>
+    )
+  }
+  if (k === 'rect') {
+    return (
+      <mesh position={[0, item.h/2 + ITEM_DROP_HEIGHT, 0]} castShadow>
+        <boxGeometry args={[item.w, item.h, item.d]} />
+        <meshStandardMaterial color={item.color} roughness={0.5} metalness={0.25} />
+      </mesh>
+    )
+  }
+  if (k === 'mug') {
+    return (
+      <group position={[0, ITEM_DROP_HEIGHT, 0]}>
+        <mesh position={[0, item.h/2, 0]} castShadow>
+          <cylinderGeometry args={[item.r, item.r * 0.9, item.h, 14]} />
+          <meshStandardMaterial color={item.color} roughness={0.5} metalness={0.2} />
+        </mesh>
+        <mesh position={[item.r + 0.015, item.h * 0.5, 0]} rotation={[Math.PI/2, 0, 0]}>
+          <torusGeometry args={[0.025, 0.008, 6, 12, Math.PI]} />
+          <meshStandardMaterial color={item.color} roughness={0.5} />
+        </mesh>
+      </group>
+    )
+  }
+  if (k === 'bottle') {
+    return (
+      <mesh position={[0, item.h/2 + ITEM_DROP_HEIGHT, 0]} castShadow>
+        <cylinderGeometry args={[item.r, item.r * 0.8, item.h, 14]} />
+        <meshStandardMaterial color={item.color} roughness={0.25} metalness={0.1} transparent opacity={0.75} />
+      </mesh>
+    )
+  }
+  if (k === 'laptop') {
+    return (
+      <group position={[0, ITEM_DROP_HEIGHT, 0]}>
+        <mesh position={[0, item.h/2, 0]} castShadow>
+          <boxGeometry args={[item.w, item.h, item.d]} />
+          <meshStandardMaterial color={item.color} roughness={0.4} metalness={0.5} />
+        </mesh>
+        {/* lid tilted up */}
+        <group position={[0, item.h, -item.d/2]}>
+          <mesh position={[0, item.w/2 * 0.45, -item.d/2 * 0.1]} rotation={[-Math.PI/2.6, 0, 0]} castShadow>
+            <boxGeometry args={[item.w, item.d, 0.005]} />
+            <meshStandardMaterial color="#0b1220" emissive="#1e3a8a" emissiveIntensity={0.5} />
+          </mesh>
+        </group>
+      </group>
+    )
+  }
+  // default: small box
+  return (
+    <mesh position={[0, 0.04, 0]} castShadow>
+      <boxGeometry args={[0.1, 0.08, 0.1]} />
+      <meshStandardMaterial color={item.color} />
+    </mesh>
+  )
+}
+
+function WorldItems({ itemsState, inventory }) {
+  const held = new Set(inventory.map((h) => h.id))
+  return itemsState.filter((it) => !held.has(it.id)).map((it) => (
+    <group key={it.id} position={[it.x, 0, it.y]}>
+      <ItemMesh item={it} />
+      <Html position={[0, 0.28, 0]} center distanceFactor={12} zIndexRange={[0, 0]}>
+        <div className="px-1 py-0.5 text-[7px] font-mono uppercase tracking-widest bg-black/70 text-amber-200 rounded whitespace-nowrap pointer-events-none border border-amber-400/30">
+          {it.label}
+        </div>
+      </Html>
+    </group>
+  ))
+}
+
+function HeldItems({ stateRef, inventory }) {
+  const groupRef = useRef()
+  useFrame(() => {
+    if (!groupRef.current) return
+    const s = stateRef.current
+    groupRef.current.position.set(s.x, 0.6, s.y)
+    groupRef.current.rotation.y = -s.heading
+  })
+  if (inventory.length === 0) return null
+  return (
+    <group ref={groupRef}>
+      {inventory.map((it, i) => (
+        <group key={it.id} position={[0, i * 0.1, 0]}>
+          <ItemMesh item={it} />
+        </group>
+      ))}
+    </group>
+  )
+}
+
+// ───── Team users rendered as avatars at their seats ─────
+function SimUsers({ usersState }) {
+  return usersState.map((u) => (
+    <group key={u.id} position={[u.x, 0, u.y]}>
+      {/* shadow disc */}
+      <mesh position={[0, 0.003, 0]} rotation={[-Math.PI/2, 0, 0]}>
+        <circleGeometry args={[0.3, 20]} />
+        <meshBasicMaterial color="#000" transparent opacity={0.35} />
+      </mesh>
+      {/* body — tall cylinder, colored */}
+      <mesh position={[0, 0.45, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[0.16, 0.2, 0.75, 16]} />
+        <meshStandardMaterial color={u.color} roughness={0.7} metalness={0.1} />
+      </mesh>
+      {/* head */}
+      <mesh position={[0, 0.95, 0]} castShadow>
+        <sphereGeometry args={[0.11, 20, 20]} />
+        <meshStandardMaterial color="#d4c7b2" roughness={0.85} />
+      </mesh>
+      {/* name tag */}
+      <Html position={[0, 1.3, 0]} center distanceFactor={11} zIndexRange={[0, 0]}>
+        <div className="px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-widest rounded whitespace-nowrap pointer-events-none border"
+             style={{ background: 'rgba(0,0,0,0.55)', color: u.color, borderColor: u.color + '50' }}>
+          {u.name} · {u.role}
+        </div>
+      </Html>
+    </group>
+  ))
 }
 
 function LLMLatencySparkline({ samples }) {
@@ -512,7 +645,7 @@ function CameraRig({ stateRef, follow }) {
 }
 
 // ───── Minimap 2D overlay ─────
-function Minimap({ stateRef, costmapRef, pathPreview }) {
+function Minimap({ stateRef, costmapRef, pathPreview, itemsState, usersState }) {
   const canvasRef = useRef()
   useEffect(() => {
     let raf
@@ -565,10 +698,28 @@ function Minimap({ stateRef, costmapRef, pathPreview }) {
         ctx.beginPath(); ctx.arc(last.x * pm, last.y * pm, 3, 0, Math.PI*2); ctx.fill()
       }
 
+      // items (small amber dots)
+      if (itemsState) {
+        for (const it of itemsState) {
+          ctx.fillStyle = '#fbbf24'
+          ctx.beginPath(); ctx.arc(it.x * pm, it.y * pm, 2, 0, Math.PI*2); ctx.fill()
+        }
+      }
+      // team users (colored circles)
+      if (usersState) {
+        for (const u of usersState) {
+          ctx.fillStyle = u.color
+          ctx.globalAlpha = 0.9
+          ctx.beginPath(); ctx.arc(u.x * pm, u.y * pm, 3.5, 0, Math.PI*2); ctx.fill()
+          ctx.globalAlpha = 1
+        }
+      }
       // npcs
       for (const n of NPCS) {
         ctx.fillStyle = n.color
-        ctx.beginPath(); ctx.arc(n.x * pm, n.y * pm, 3, 0, Math.PI*2); ctx.fill()
+        ctx.globalAlpha = 0.55
+        ctx.beginPath(); ctx.arc(n.x * pm, n.y * pm, 2.5, 0, Math.PI*2); ctx.fill()
+        ctx.globalAlpha = 1
       }
 
       const s = stateRef.current
@@ -586,7 +737,7 @@ function Minimap({ stateRef, costmapRef, pathPreview }) {
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)
-  }, [pathPreview])
+  }, [pathPreview, itemsState, usersState])
   const W = 280, H = W * (WORLD.h / WORLD.w)
   return (
     <div className="absolute top-3 right-3 pointer-events-none">
@@ -669,6 +820,19 @@ export default function Simulator() {
   const [thoughts, setThoughts] = useState([])        // autonomous-loop thought stream
   const [llmLatency, setLlmLatency] = useState([])    // last ~20 ms samples
   const [pathPreview, setPathPreview] = useState([])  // for 3D overlay
+  const [showChat, setShowChat] = useState(true)      // inline chat panel for one-screen demo
+  const [itemsState, setItemsState] = useState(ITEMS.map((it) => ({ ...it })))
+  const [inventory, setInventory] = useState([])      // items currently held by EDEN
+  const [usersState, setUsersState] = useState(TEAM.map((p) => ({ id: p.id, name: p.name, role: p.role, color: p.color, x: p.seat.x, y: p.seat.y })))
+  const [task, setTask] = useState(null)              // { kind, phase, itemId, recipientId, startedAt }
+  const taskRef = useRef(null)
+  useEffect(() => { taskRef.current = task }, [task])
+  const itemsRef = useRef(itemsState)
+  useEffect(() => { itemsRef.current = itemsState }, [itemsState])
+  const usersRef = useRef(usersState)
+  useEffect(() => { usersRef.current = usersState }, [usersState])
+  const inventoryRef = useRef(inventory)
+  useEffect(() => { inventoryRef.current = inventory }, [inventory])
 
   // Latest-value refs — fix stale-closure in bus receiver / physics loop
   const latestRef = useRef({ log, useLLM, npcsState, goals, batteryPct })
@@ -718,6 +882,64 @@ export default function Simulator() {
     const ts = Date.now()
     const s = stateRef.current
     const { log: latestLog, useLLM: latestUseLLM, npcsState: latestNpcs, batteryPct: latestBat } = latestRef.current
+
+    // ─── Task intent detection (fetch/deliver/drop) ───
+    const intent = parseTaskIntent(rawAction)
+    if (intent) {
+      const item = findItem(intent.item)
+      if (!item) {
+        const entry = { ts, source, action: rawAction, decision: 'refuse', reason: `I don't see any "${intent.item}" in the lab`, model: 'task-parser', ms: 0 }
+        setLog((p) => [entry, ...p].slice(0, 50))
+        return
+      }
+      if (intent.kind === 'drop') {
+        // drop in front of the robot
+        const held = inventoryRef.current.find((h) => h.id === item.id)
+        if (!held) {
+          const entry = { ts, source, action: rawAction, decision: 'refuse', reason: `I'm not holding the ${item.label}`, model: 'task-parser', ms: 0 }
+          setLog((p) => [entry, ...p].slice(0, 50))
+          return
+        }
+        const dropX = s.x + Math.cos(s.heading) * 0.5
+        const dropY = s.y + Math.sin(s.heading) * 0.5
+        setInventory((inv) => inv.filter((h) => h.id !== item.id))
+        setItemsState((list) => list.map((it) => it.id === item.id ? { ...it, x: dropX, y: dropY } : it))
+        const entry = { ts, source, action: rawAction, decision: 'execute', reason: `dropped ${item.label}`, model: 'task-sm', ms: 0, goal: `drop:${item.label}` }
+        setLog((p) => [entry, ...p].slice(0, 50))
+        publish('/task_status', { _type: 'eden/TaskStatus', kind: 'drop', item: item.id, at: { x: dropX, y: dropY } })
+        return
+      }
+      // Fetch: resolve recipient
+      let recipient = null
+      if (intent.recipient === '__speaker__') {
+        // Find team member by chat speaker name
+        if (chatCtx?.speaker) recipient = findTeammate(chatCtx.speaker)
+      } else if (intent.recipient) {
+        recipient = findTeammate(intent.recipient)
+      }
+      const recipientUser = recipient ? usersRef.current.find((u) => u.id === recipient.id) : null
+
+      // Run the cognitive gate on the compound intent — EDEN can still refuse
+      setThinking({ action: rawAction, source })
+      const obstacles = OBSTACLES.map((o) => ({ ...o, dist: Math.hypot(o.x - s.x, o.y - s.y), reachable: lineOfSight(costmapRef.current, { x: s.x, y: s.y }, { x: o.x, y: o.y }) })).filter((o) => o.dist < 10).sort((a, b) => a.dist - b.dist)
+      const history = latestLog.slice(0, 4).map((l) => ({ source: l.source, action: l.action, decision: l.decision }))
+      const goal = { label: `${item.label}${recipientUser ? ` → ${recipientUser.name}` : ''}`, x: item.x, y: item.y, dist: Math.hypot(item.x - s.x, item.y - s.y), blocked: !lineOfSight(costmapRef.current, { x: s.x, y: s.y }, { x: item.x, y: item.y }) }
+      const res = await classifyAction({
+        action: rawAction,
+        robot: { x: s.x, y: s.y, heading: s.heading, linVel: s.linVel, angVel: s.angVel },
+        obstacles, npcs: latestNpcs, history,
+        chatCtx, goal, battery: latestBat,
+      })
+      setThinking(null)
+      setLlmLatency((p) => [...p, res.ms].slice(-20))
+      const entry = { ts, source, action: rawAction, decision: res.decision, reason: res.reason, linear: res.linear, angular: res.angular, duration: res.duration, model: res.model, ms: res.ms, goal: goal.label }
+      setLog((p) => [entry, ...p].slice(0, 50))
+      if (res.decision === 'refuse') return
+
+      // Start the task state machine
+      startFetchTask({ item, recipientUser })
+      return
+    }
 
     if (!latestUseLLM || source === 'manual-direct') {
       const { parseAction } = await import('../lib/simBridge')
@@ -771,6 +993,78 @@ export default function Simulator() {
     commitCmd(res.linear, res.angular, res.duration, false)
   }
 
+  // ─── Task state machine ───
+  // phases: 'goto_item' → (on arrival) pickup → (if recipient) 'goto_user' → drop → 'done'
+  function startFetchTask({ item, recipientUser }) {
+    const t = { kind: 'fetch', phase: 'goto_item', itemId: item.id, itemLabel: item.label, recipientId: recipientUser?.id || null, recipientName: recipientUser?.name || null, startedAt: Date.now() }
+    setTask(t)
+    planToPoint({ x: item.x, y: item.y, label: `pickup: ${item.label}` })
+    publish('/task_status', { _type: 'eden/TaskStatus', kind: 'fetch_start', item: item.id, recipient: recipientUser?.id || null })
+  }
+
+  function advanceTask() {
+    const t = taskRef.current
+    if (!t) return
+    const s = stateRef.current
+    if (t.phase === 'goto_item') {
+      const item = itemsRef.current.find((it) => it.id === t.itemId)
+      if (!item) return
+      const d = Math.hypot(s.x - item.x, s.y - item.y)
+      if (d > 1.0) {
+        // Arrived-at-waypoints but still far from item — replan
+        planToPoint({ x: item.x, y: item.y, label: `pickup: ${item.label}` })
+        return
+      }
+      // Pick up
+      setInventory((inv) => [...inv, item])
+      setItemsState((list) => list.filter((it) => it.id !== t.itemId))
+      publish('/task_status', { _type: 'eden/TaskStatus', kind: 'pickup', item: item.id })
+      if (t.recipientId) {
+        const u = usersRef.current.find((uu) => uu.id === t.recipientId)
+        if (u) {
+          setTask({ ...t, phase: 'goto_user' })
+          // Stand slightly off the user's seat so the robot isn't on top of them
+          const offX = u.x - 0.7, offY = u.y - 0.7
+          planToPoint({ x: offX, y: offY, label: `deliver: ${u.name}` })
+          return
+        }
+      }
+      // No recipient — task done
+      setTask({ ...t, phase: 'done' })
+      setTimeout(() => setTask((cur) => (cur && cur.startedAt === t.startedAt ? null : cur)), 1200)
+    } else if (t.phase === 'goto_user') {
+      const u = usersRef.current.find((uu) => uu.id === t.recipientId)
+      const d = u ? Math.hypot(s.x - u.x, s.y - u.y) : 99
+      if (d > 1.4) {
+        if (u) planToPoint({ x: u.x - 0.7, y: u.y - 0.7, label: `deliver: ${u.name}` })
+        return
+      }
+      // Deliver
+      const held = inventoryRef.current.find((h) => h.id === t.itemId)
+      if (held && u) {
+        const dropX = u.x + 0.3, dropY = u.y + 0.3
+        setInventory((inv) => inv.filter((h) => h.id !== t.itemId))
+        setItemsState((list) => [...list, { ...held, x: dropX, y: dropY }])
+        publish('/task_status', { _type: 'eden/TaskStatus', kind: 'delivered', item: t.itemId, recipient: t.recipientId })
+      }
+      setTask({ ...t, phase: 'done' })
+      setTimeout(() => setTask((cur) => (cur && cur.startedAt === t.startedAt ? null : cur)), 1500)
+    }
+  }
+
+  function planToPoint({ x, y, label }) {
+    const s = stateRef.current
+    costmapRef.current.rebuildInflation()
+    const plan = planPath(costmapRef.current, { x: s.x, y: s.y }, { x, y })
+    if (plan.ok && plan.waypoints.length > 1) {
+      s.path = plan.waypoints
+      s.pathGoal = { label, x, y }
+      s.pathIdx = 1
+      setPathPreview(plan.waypoints)
+      publish('/plan', { _type: 'nav_msgs/Path', poses: plan.waypoints, header: { stamp: performance.now(), frame_id: 'map' } })
+    }
+  }
+
   function maybePlanToLandmark(rawAction, goal = null) {
     const s = stateRef.current
     const lm = goal || (() => {
@@ -820,6 +1114,10 @@ export default function Simulator() {
             if (s.pathIdx >= s.path.length) {
               s.path = []; s.pathGoal = null; s.pathIdx = 0
               setPathPreview([])
+              // If a task was awaiting arrival, advance the state machine
+              if (taskRef.current) {
+                queueMicrotask(() => advanceTask())
+              }
             }
           } else {
             const targetHeading = Math.atan2(dy, dx)
@@ -1102,8 +1400,11 @@ export default function Simulator() {
               <Floor />
               <Walls />
               <Obstacles />
+              <WorldItems itemsState={itemsState} inventory={inventory} />
+              <SimUsers usersState={usersState} />
               <NpcRobots npcsState={npcsState} />
               <RobotMesh stateRef={stateRef} showOdom={showOdom} />
+              <HeldItems stateRef={stateRef} inventory={inventory} />
               <LidarRays stateRef={stateRef} show={showLidar} />
               <PathPreview waypoints={pathPreview} />
 
@@ -1136,7 +1437,38 @@ export default function Simulator() {
             ↑↓ drive · ←→ turn · space stop · R reset · C toggle follow cam · drag to orbit (when follow off)
           </div>
 
-          <Minimap stateRef={stateRef} costmapRef={costmapRef} pathPreview={pathPreview} />
+          <Minimap stateRef={stateRef} costmapRef={costmapRef} pathPreview={pathPreview} itemsState={itemsState} usersState={usersState} />
+
+          {/* Inline chat panel — the one-screen demo */}
+          {showChat && (
+            <div className="absolute bottom-3 right-3 w-[420px] h-[540px] rounded-xl border border-white/20 bg-black/70 backdrop-blur overflow-hidden shadow-2xl flex flex-col pointer-events-auto">
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 bg-black/60">
+                <Brain size={12} className="text-cyan-300" />
+                <span className="text-[11px] font-mono uppercase tracking-widest text-cyan-300">chat · cognitive loop</span>
+                <span className="text-[9px] font-mono text-emerald-300 ml-auto flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> live bus
+                </span>
+                <button
+                  onClick={() => setShowChat(false)}
+                  className="ml-1 text-white/50 hover:text-white text-[10px] font-mono uppercase tracking-widest"
+                >hide</button>
+              </div>
+              <iframe
+                src={`${import.meta.env.BASE_URL}chat?embed=1`}
+                title="EDEN chat"
+                className="flex-1 w-full border-0 bg-black"
+                allow="clipboard-read; clipboard-write"
+              />
+            </div>
+          )}
+          {!showChat && (
+            <button
+              onClick={() => setShowChat(true)}
+              className="absolute bottom-3 right-3 px-3 py-2 rounded-lg border border-white/20 bg-black/70 backdrop-blur text-[11px] font-mono uppercase tracking-widest text-cyan-300 hover:border-cyan-400/50 pointer-events-auto"
+            >
+              <Brain size={12} className="inline -mt-0.5 mr-1.5" /> open chat
+            </button>
+          )}
 
           <AnimatePresence>
             {thinking && (
@@ -1197,6 +1529,35 @@ export default function Simulator() {
                 <div className="text-white/80">→ {stateRef.current.pathGoal.label}</div>
                 <div className="text-white/40">waypoint {stateRef.current.pathIdx}/{stateRef.current.path.length}</div>
               </div>
+            )}
+          </div>
+
+          {/* Inventory + active task */}
+          <div className="px-4 py-3 border-b border-white/10">
+            <div className="flex items-center gap-1.5 mb-2">
+              <BoxIcon size={11} className="text-amber-300"/>
+              <span className="text-[11px] font-mono uppercase tracking-widest text-amber-300">Inventory · task SM</span>
+            </div>
+            {task ? (
+              <div className="mb-2 px-2 py-1.5 rounded border border-cyan-400/30 bg-cyan-400/5 text-[10px] font-mono">
+                <div className="text-cyan-300 uppercase tracking-widest mb-0.5">active task · {task.phase}</div>
+                <div className="text-white/80">
+                  {task.kind === 'fetch' && <>fetch <span className="text-amber-300">{task.itemLabel}</span>{task.recipientName && <> → <span className="text-cyan-200">{task.recipientName}</span></>}</>}
+                </div>
+              </div>
+            ) : (
+              <div className="mb-2 text-[10px] font-mono text-white/30">idle · no task</div>
+            )}
+            {inventory.length === 0 ? (
+              <div className="text-[10px] font-mono text-white/30">empty hands</div>
+            ) : (
+              <ul className="space-y-0.5">
+                {inventory.map((it) => (
+                  <li key={it.id} className="text-[10px] font-mono text-amber-200 flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-amber-400"/> holding: {it.label}
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 
