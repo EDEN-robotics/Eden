@@ -348,6 +348,25 @@ function formatDate(ts) {
   return d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
+// Keywords that make a non-mentioned message worth EDEN's attention.
+// Chosen to match the team's actual lingo — the aim is for EDEN to jump in
+// on robotics/sim/meta talk and stay out of pure chitchat.
+const EDEN_KEYWORDS = /\beden\b|\brobot\b|\brobotics\b|\blidar\b|\bworkbench\b|\bsim\b|\bgazebo\b|\bpencil\b|\bcoffee\s*mug\b|\bscrewdriver\b|\bcaliper\b|\bmultimeter\b|\bclipboard\b|\blaptop\b|\busb\s*drive\b|\bcharg(e|ing)\b|\bbattery\b|\bmemory\b|\bvibe\b|\bnemotron\b|\bjetson\b|\bros\b|\bbot\b|\bmove\b|\bdrive\b|\bfetch\b|\bpickup\b|\bdrop\s*it\b|\bcognitive\b|\bperception\b|\bplanning\b|\baction\s*layer\b/i
+
+// Decide if EDEN should even consider replying. Two signals come out:
+//   addressed — user said @eden or sent an image
+//   worth     — engagement threshold for un-addressed messages (keyword,
+//                question, or substantive length)
+function shouldEdenConsider(text, hasImage) {
+  if (hasImage) return { addressed: true, worth: true }
+  if (!text) return { addressed: false, worth: false }
+  if (mentionsEden(text)) return { addressed: true, worth: true }
+  const hasKw = EDEN_KEYWORDS.test(text)
+  const isQuestion = /\?/.test(text)
+  const isSubstantive = text.trim().length > 40
+  return { addressed: false, worth: hasKw || isQuestion || isSubstantive }
+}
+
 function mentionsEden(text) {
   if (!text) return false
   return /@eden\b|^eden[,:\s]|\beden[,?]\s*$/i.test(text)
@@ -1124,8 +1143,10 @@ export default function Chat() {
       extraMetadata: image ? { has_image: true, layer: 'perception' } : {},
     }).then(() => setMemoryRefresh((n) => n + 1))
 
-    // Only trigger bot if @eden mentioned (or if an image was sent explicitly @eden)
-    if (!mentionsEden(textContent)) return
+    // Engagement filter: @mention or image → always; otherwise only "worth"
+    // messages pass (keyword, question, or substantive length).
+    const { addressed, worth } = shouldEdenConsider(textContent, !!image)
+    if (!worth) return
     // NOTE: no more user-intent pre-dispatch. EDEN decides actions itself,
     // from the conversation's meaning, via its envelope [ACTION] tag.
 
@@ -1143,7 +1164,7 @@ export default function Chat() {
         userName: user.fullName || user.firstName || 'Member',
         email: user.primaryEmailAddress?.emailAddress,
         text: textContent,
-        hasMention: true,
+        hasMention: addressed,
         image: image ? true : false,
         imageInfo: attachedImage ? { w: attachedImage.w, h: attachedImage.h, size: attachedImage.size } : null,
       },
@@ -1179,6 +1200,9 @@ export default function Chat() {
       email: user.primaryEmailAddress?.emailAddress,
     })
     const vibeBlock = formatVibeForPrompt(currentVibe, userDisplayName)
+    const addressedBlock = addressed
+      ? `\n\n=== DIRECTLY ADDRESSED ===\n${userDisplayName} used @eden or sent you an image. Engage normally — this is a direct request to you.`
+      : `\n\n=== NOT DIRECTLY ADDRESSED ===\n${userDisplayName} did NOT @mention you. You are overhearing the team chat. Only chime in if you have something genuinely worth saying — a reaction, a technical correction, a joke that lands, or an observation that adds value. Most overheard messages deserve zero response.\n\nTo stay silent, emit the four envelope tags (PLAN/TONE/VIBE/ACTION) on their own lines, then end immediately. Do NOT write any prose after the tags. An empty body means 'I heard, I'm choosing not to speak.' We will suppress empty replies from the UI so you appear invisible.\n\nIf you DO speak, keep it short — one or two lines max. You're jumping into an existing conversation, not monologuing.`
 
     // Fill retrieval frame in trace
     trace.retrieval = {
@@ -1218,13 +1242,13 @@ export default function Chat() {
         ],
       }
       conversation = [
-        { role: 'system', content: SYSTEM_PROMPT + '\n\n' + teamPromptBlock() + peopleBlock + vibeBlock + memoryBlock },
+        { role: 'system', content: SYSTEM_PROMPT + '\n\n' + teamPromptBlock() + peopleBlock + vibeBlock + memoryBlock + addressedBlock },
         ...historyMsgs.slice(0, lastIdx),
         multimodalLast,
       ]
     } else {
       conversation = [
-        { role: 'system', content: SYSTEM_PROMPT + '\n\n' + teamPromptBlock() + peopleBlock + vibeBlock + memoryBlock },
+        { role: 'system', content: SYSTEM_PROMPT + '\n\n' + teamPromptBlock() + peopleBlock + vibeBlock + memoryBlock + addressedBlock },
         ...historyMsgs,
       ]
     }
@@ -1276,6 +1300,18 @@ export default function Chat() {
       trace.cognition.outputChars = botContent.length
       trace.cognition.outputTokens = Math.ceil(botContent.length / 4)
       trace.cognition.model = modelUsed
+
+      // If not directly addressed AND the answer body is empty, stay silent:
+      // remove the temp bot message and don't persist. EDEN "heard but chose
+      // not to speak". Envelope-only output counts as silence.
+      const earlyEnv = parseBotEnvelope(botContent)
+      if (!addressed && (!earlyEnv.answer || earlyEnv.answer.trim().length === 0)) {
+        setMessages((prev) => prev.filter((m) => m.id !== tempId))
+        setMemoriesById((prev) => { const n = { ...prev }; delete n[tempId]; return n })
+        setStreaming(false)
+        console.log('[chat] unaddressed + empty body → EDEN stays silent')
+        return
+      }
 
       const { data: botMsg } = await supabase
         .from('messages')
