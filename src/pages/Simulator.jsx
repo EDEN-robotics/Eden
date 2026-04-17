@@ -756,9 +756,26 @@ function Minimap({ stateRef, costmapRef, pathPreview, itemsState, usersState }) 
 const LANDMARKS = OBSTACLES.filter((o) => /^(workbench|dock|bin|rack|crate|cone|bench|marker|charging)/i.test(o.label))
   .map((o) => ({ label: o.label.toLowerCase(), x: o.x, y: o.y, w: o.w, h: o.h }))
 
+// Synonyms & typos for landmark keywords
+const LANDMARK_SYNONYMS = [
+  [/\bworkspace\b/g, 'workbench'],      // common typo
+  [/\bwork\s+bench\b/g, 'workbench'],
+  [/\bcharging\s+station\b/g, 'charging dock'],
+  [/\bdock\b/g, 'charging dock'],        // "go to the dock"
+  [/\bserver\b(?!\s+rack)/g, 'server rack'],
+  [/\bcables?\b/g, 'cable trunk'],
+  [/\bparts?\b(?!\s+bin)/g, 'parts bin'],
+]
+
+function normalizeForLandmark(text) {
+  let t = text.toLowerCase()
+  for (const [re, rep] of LANDMARK_SYNONYMS) t = t.replace(re, rep)
+  return t
+}
+
 function findLandmark(text) {
   if (!text) return null
-  const t = text.toLowerCase()
+  const t = normalizeForLandmark(text)
   // Exact/partial phrase matches first
   for (const lm of LANDMARKS) {
     if (t.includes(lm.label)) return lm
@@ -993,6 +1010,17 @@ export default function Simulator() {
       return
     }
 
+    // Named-landmark goal — fuzzy-matched ("workspace A" → "workbench A").
+    // If we get a landmark hit, bypass the cognitive gate: the user was
+    // explicit about the destination and the chat LLM already approved.
+    const lm = findLandmark(rawAction)
+    if (lm) {
+      const entry = { ts, source, action: rawAction, decision: 'execute', reason: `nav: ${lm.label}`, model: 'landmark', ms: 0, goal: lm.label }
+      setLog((p) => [entry, ...p].slice(0, 50))
+      maybePlanToLandmark(rawAction, { label: lm.label, x: lm.x, y: lm.y })
+      return
+    }
+
     setThinking({ action: rawAction, source })
 
     // Build rich context for the LLM
@@ -1006,15 +1034,7 @@ export default function Simulator() {
     const npcs = latestNpcs.filter((n) => Math.hypot(n.x - s.x, n.y - s.y) < R.detection_r * 1.5)
     const history = latestLog.slice(0, 4).map((l) => ({ source: l.source, action: l.action, decision: l.decision }))
 
-    // Named-landmark goal extraction
-    const lm = findLandmark(rawAction)
-    let goal = null
-    if (lm) {
-      const d = Math.hypot(lm.x - s.x, lm.y - s.y)
-      const clear = lineOfSight(costmapRef.current, { x: s.x, y: s.y }, { x: lm.x, y: lm.y })
-      goal = { label: lm.label, x: lm.x, y: lm.y, dist: d, blocked: !clear }
-    }
-
+    const goal = null
     const res = await classifyAction({
       action: rawAction,
       robot: { x: s.x, y: s.y, heading: s.heading, linVel: s.linVel, angVel: s.angVel },
@@ -1023,14 +1043,9 @@ export default function Simulator() {
     })
     setThinking(null)
     setLlmLatency((p) => [...p, res.ms].slice(-20))
-    const entry = { ts, source, action: rawAction, decision: res.decision, reason: res.reason, linear: res.linear, angular: res.angular, duration: res.duration, model: res.model, ms: res.ms, goal: goal?.label || null }
+    const entry = { ts, source, action: rawAction, decision: res.decision, reason: res.reason, linear: res.linear, angular: res.angular, duration: res.duration, model: res.model, ms: res.ms }
     setLog((p) => [entry, ...p].slice(0, 50))
     if (res.decision === 'refuse' || res.linear === null) return
-
-    // If there's a landmark goal, plan a path and follow waypoints instead of a blind cmd
-    if (goal) {
-      maybePlanToLandmark(rawAction, goal)
-    }
     commitCmd(res.linear, res.angular, res.duration, false)
   }
 
@@ -1327,8 +1342,12 @@ export default function Simulator() {
         return
       }
 
-      // Skip tick if we're actively moving or following a plan
-      if (s.pathGoal || Math.abs(s.linVel) > 0.05 || stateRef.current.cmdUntil > performance.now() + 200) return
+      // Skip tick if we're actively moving, following a plan, have a task,
+      // OR the user/chat acted recently (don't spam random actions while the
+      // operator is clearly engaged).
+      if (s.pathGoal || taskRef.current || Math.abs(s.linVel) > 0.05 || stateRef.current.cmdUntil > performance.now() + 200) return
+      const lastHuman = latestLog.find((l) => l.source === 'manual' || l.source === 'eden')
+      if (lastHuman && (Date.now() - lastHuman.ts) < 60_000) return
 
       const unexplored = 1 - estimateExploredFraction(costmapRef.current)
       const recentActions = latestLog.slice(0, 4).map((l) => `${l.action} → ${l.decision}`)
