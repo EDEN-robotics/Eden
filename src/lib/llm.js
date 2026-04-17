@@ -265,8 +265,11 @@ export async function chatStreaming({ messages, temperature = 0.85, max_tokens =
       }
 
       if (error) { console.warn(`[llm/stream] ${p.name} ${error}; next`); continue }
-      if (text.trim().length > 0) return { text, model: p.name, error: null }
-      console.warn(`[llm/stream] ${p.name} empty stream; next`)
+      // Reject suspiciously tiny outputs (e.g. a single '[' — Nemotron sometimes
+      // streams just the envelope opener then disconnects). Falls through to
+      // the next provider.
+      if (text.trim().length >= 20) return { text, model: p.name, error: null }
+      console.warn(`[llm/stream] ${p.name} too-short output (${text.length} chars): ${JSON.stringify(text)}; next`)
     } catch (err) {
       console.warn(`[llm/stream] ${p.name} threw: ${err.message}`)
     }

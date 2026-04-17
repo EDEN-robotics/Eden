@@ -753,7 +753,8 @@ function Minimap({ stateRef, costmapRef, pathPreview, itemsState, usersState }) 
 }
 
 // Landmark lookup for named goals ("drive to workbench A" → a coordinate)
-const LANDMARKS = OBSTACLES.filter((o) => /^(workbench|dock|bin|rack|crate|cone|bench|marker|charging)/i.test(o.label))
+// Every obstacle that isn't a wall is a navigable landmark.
+const LANDMARKS = OBSTACLES.filter((o) => !/\bwall\b/i.test(o.label))
   .map((o) => ({ label: o.label.toLowerCase(), x: o.x, y: o.y, w: o.w, h: o.h }))
 
 // Synonyms & typos for landmark keywords
@@ -946,7 +947,9 @@ export default function Simulator() {
     }
 
     if (intent) {
-      const item = findItem(intent.item)
+      // Try the raw action first — findItem does longest-substring match, so
+      // "get the water bottle" finds "water bottle", not just "water".
+      const item = findItem(rawAction) || findItem(intent.item)
       if (!item) {
         const entry = { ts, source, action: rawAction, decision: 'refuse', reason: `I don't see any "${intent.item}" in the lab`, model: 'task-parser', ms: 0 }
         setLog((p) => [entry, ...p].slice(0, 50))
@@ -1019,6 +1022,22 @@ export default function Simulator() {
       setLog((p) => [entry, ...p].slice(0, 50))
       maybePlanToLandmark(rawAction, { label: lm.label, x: lm.x, y: lm.y })
       return
+    }
+
+    // Teammate-as-target: "go to vedant", "drive over to joseph" — plan a
+    // path to their seat if the action has a nav verb.
+    const hasNavVerb = /\b(go|drive|head|move|navigate|walk|come|proceed)\b/i.test(rawAction)
+    if (hasNavVerb) {
+      const tm = findTeammate(rawAction)
+      if (tm) {
+        const u = usersRef.current.find((uu) => uu.id === tm.id)
+        if (u) {
+          const entry = { ts, source, action: rawAction, decision: 'execute', reason: `nav to ${u.name}`, model: 'landmark', ms: 0, goal: u.name }
+          setLog((p) => [entry, ...p].slice(0, 50))
+          planToPoint({ x: u.x - 0.7, y: u.y - 0.7, label: `nav: ${u.name}` })
+          return
+        }
+      }
     }
 
     setThinking({ action: rawAction, source })
