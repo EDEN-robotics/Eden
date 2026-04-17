@@ -10,75 +10,50 @@
 // All providers speak the OpenAI chat-completions protocol so the streaming
 // parser below works against every one of them.
 
-const GEMINI_KEY = (import.meta.env.VITE_GEMINI_API_KEY || '').trim()
 const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || '').trim()
+const OR_URL = 'https://openrouter.ai/api/v1/chat/completions'
 
-export const PROVIDERS = [
-  // Native Gemini REST — guaranteed CORS-friendly via ?key=. Primary.
-  GEMINI_KEY && {
-    name: 'gemini-native-2.0',
-    kind: 'gemini-native',
-    model: 'gemini-2.0-flash',
-    key: GEMINI_KEY,
-  },
-  GEMINI_KEY && {
-    name: 'gemini-native-1.5',
-    kind: 'gemini-native',
-    model: 'gemini-1.5-flash-latest',
-    key: GEMINI_KEY,
-  },
-  // OpenAI-compat Gemini endpoint (some environments; may trip CORS)
-  GEMINI_KEY && {
-    name: 'gemini-openai-compat',
+// OpenRouter-only chain. Primary: NVIDIA Nemotron 3 Super (free, 262K ctx,
+// hybrid Mamba-Transformer MoE). Fallback: Llama 3.3 70B free tier.
+export const PROVIDERS = OPENROUTER_KEY ? [
+  {
+    name: 'or-nemotron-3-super',
     kind: 'openai',
-    url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
-    model: 'gemini-2.0-flash',
-    key: GEMINI_KEY,
-    referer: false,
-  },
-  OPENROUTER_KEY && {
-    name: 'or-gemini-flash',
-    kind: 'openai',
-    url: 'https://openrouter.ai/api/v1/chat/completions',
-    model: 'google/gemini-2.0-flash-exp:free',
+    url: OR_URL,
+    model: 'nvidia/nemotron-3-super-120b-a12b:free',
     key: OPENROUTER_KEY,
     referer: true,
   },
-  OPENROUTER_KEY && {
+  {
     name: 'or-llama-70b',
     kind: 'openai',
-    url: 'https://openrouter.ai/api/v1/chat/completions',
+    url: OR_URL,
     model: 'meta-llama/llama-3.3-70b-instruct:free',
     key: OPENROUTER_KEY,
     referer: true,
   },
-  OPENROUTER_KEY && {
-    name: 'or-llama-8b',
+] : []
+
+// Vision chain. Nemotron-3-super is text-only; Nemotron Nano 2 VL handles
+// multimodal. Llama-3.2 vision as final fallback.
+export const VISION_PROVIDERS = OPENROUTER_KEY ? [
+  {
+    name: 'or-nemotron-nano-vl',
     kind: 'openai',
-    url: 'https://openrouter.ai/api/v1/chat/completions',
-    model: 'meta-llama/llama-3.1-8b-instruct:free',
+    url: OR_URL,
+    model: 'nvidia/nemotron-nano-12b-2-vl',
     key: OPENROUTER_KEY,
     referer: true,
   },
-].filter(Boolean)
-
-// Vision-capable chain (for image inputs)
-export const VISION_PROVIDERS = [
-  GEMINI_KEY && {
-    name: 'gemini-vision-native',
-    kind: 'gemini-native',
-    model: 'gemini-2.0-flash',
-    key: GEMINI_KEY,
-  },
-  OPENROUTER_KEY && {
+  {
     name: 'or-llama-vision',
     kind: 'openai',
-    url: 'https://openrouter.ai/api/v1/chat/completions',
+    url: OR_URL,
     model: 'meta-llama/llama-3.2-90b-vision-instruct:free',
     key: OPENROUTER_KEY,
     referer: true,
   },
-].filter(Boolean)
+] : []
 
 function buildHeaders(p) {
   const h = {
