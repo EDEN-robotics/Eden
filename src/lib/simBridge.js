@@ -111,6 +111,12 @@ export function parseTaskIntent(raw) {
   const drop = s.match(/\b(drop|put down|release)\b\s+(?:the\s+)?([a-z _-]+?)(?:\s|$|[,.!?])/)
   if (drop) return { kind: 'drop', item: drop[2].trim() }
 
+  // Approach/charge patterns — aggressive rollup or friendly approach to a
+  // person. Used by the retaliation branch ("roll up on vedant") or by
+  // EDEN choosing to physically close in. Bumper keeps it safe.
+  const charge = s.match(/\b(charge\s+at|charge|roll\s+up\s+on|roll\s+up\s+to|come\s+at|come\s+for|approach|intimidate|confront)\b\s+([a-z _-]+?)(?:\s|$|[,.!?])/)
+  if (charge) return { kind: 'approach', recipient: charge[2].trim(), aggressive: /charge|roll|come|intimidate|confront/.test(charge[1]) }
+
   // Compound two-step: "get/pick up/grab/fetch X AND bring/give/hand/deliver/take [it] to Y"
   //                   "get X THEN bring [it] to Y"      (optional "it"/"them")
   const compound = s.match(/\b(get|grab|fetch|pick up|pickup)\b\s+(?:the\s+)?([a-z _-]+?)(?:\s+and\s+|\s*,?\s*then\s+)(?:bring|hand|give|deliver|take|drop\s+(?:it|them)\s+off|go\s+(?:to|over\s+to))\s*(?:it|them|off)?\s*(?:to|for|at|over\s+to)?\s*([a-z _-]+?)(?:\s|$|[,.!?])/)

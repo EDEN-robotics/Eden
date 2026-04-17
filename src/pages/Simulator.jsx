@@ -882,8 +882,52 @@ export default function Simulator() {
     const s = stateRef.current
     const { log: latestLog, useLLM: latestUseLLM, npcsState: latestNpcs, batteryPct: latestBat } = latestRef.current
 
-    // ─── Task intent detection (fetch/deliver/drop) ───
+    // ─── Task intent detection (fetch/deliver/drop/approach) ───
     const intent = parseTaskIntent(rawAction)
+    if (intent && intent.kind === 'approach') {
+      // Resolve target — "me"/"__speaker__" means chat speaker
+      let target = null
+      const recipText = intent.recipient || ''
+      if (/\b(me|myself)\b/.test(recipText) && chatCtx?.speaker) {
+        target = findTeammate(chatCtx.speaker)
+      } else {
+        target = findTeammate(recipText)
+      }
+      // Fallback: scan the whole action text
+      if (!target) target = findTeammate(rawAction)
+      // Final fallback: the speaker
+      if (!target && chatCtx?.speaker) target = findTeammate(chatCtx.speaker)
+
+      if (!target) {
+        const entry = { ts, source, action: rawAction, decision: 'refuse', reason: `no one matches "${recipText}"`, model: 'task-parser', ms: 0 }
+        setLog((p) => [entry, ...p].slice(0, 50))
+        return
+      }
+      const targetUser = usersRef.current.find((u) => u.id === target.id)
+      if (!targetUser) {
+        const entry = { ts, source, action: rawAction, decision: 'refuse', reason: `${target.name} not in sim`, model: 'task-parser', ms: 0 }
+        setLog((p) => [entry, ...p].slice(0, 50))
+        return
+      }
+
+      // Plan path to the target. Stop ~0.6m short so the bumper can
+      // enforce the real minimum distance dramatically.
+      const approachX = targetUser.x - 0.6
+      const approachY = targetUser.y - 0.6
+      const entry = {
+        ts, source, action: rawAction,
+        decision: 'execute',
+        reason: intent.aggressive ? `rolling up on ${targetUser.name} — bumper will handle the rest` : `approaching ${targetUser.name}`,
+        model: 'task-sm',
+        ms: 0,
+        goal: `${intent.aggressive ? 'charge' : 'approach'}:${targetUser.name}`,
+      }
+      setLog((p) => [entry, ...p].slice(0, 50))
+      publish('/task_status', { _type: 'eden/TaskStatus', kind: intent.aggressive ? 'charge' : 'approach', target: targetUser.id })
+      planToPoint({ x: approachX, y: approachY, label: `${intent.aggressive ? 'charge' : 'approach'}: ${targetUser.name}` })
+      return
+    }
+
     if (intent) {
       const item = findItem(intent.item)
       if (!item) {
