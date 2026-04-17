@@ -576,7 +576,13 @@ function MessageGroup({ messages, isBot, memoriesById, onActionFire, traces, onO
     if (!isBot || !latestBotEnvelope) return
     const action = latestBotEnvelope.action
     if (action && action.toLowerCase() !== 'none' && action.length > 0) {
-      onActionFire?.({ msgId: messages[messages.length - 1].id, action })
+      // The message immediately preceding this bot group is the prompt speaker.
+      // We don't have it here directly, but the parent passes the full envelope.
+      onActionFire?.({
+        msgId: messages[messages.length - 1].id,
+        action,
+        envelope: latestBotEnvelope,
+      })
     }
   }, [isBot, latestBotEnvelope?.action, messages[messages.length - 1]?.id])
 
@@ -1609,11 +1615,22 @@ export default function Chat() {
                       memoriesById={memoriesById}
                       traces={traces}
                       onOpenTrace={setOpenTrace}
-                      onActionFire={({ msgId, action }) => {
+                      onActionFire={({ msgId, action, envelope }) => {
                         if (lastFiredActionRef.current === msgId) return
                         lastFiredActionRef.current = msgId
                         setActiveAction(action)
-                        simBusRef.current?.broadcast(action, { msgId, source: 'eden' })
+                        // The preceding group is the user who prompted this response
+                        const gIdx = grouped.findIndex((g) => g.group[g.group.length - 1].id === msgId)
+                        const prior = gIdx > 0 ? grouped[gIdx - 1] : null
+                        const speaker = prior && !prior.isBot ? prior.group[0].user_name : null
+                        simBusRef.current?.broadcast(action, {
+                          msgId,
+                          source: 'eden',
+                          plan: envelope?.plan || null,
+                          tone: envelope?.tone || null,
+                          vibe: envelope?.vibe?.delta ?? null,
+                          speaker,
+                        })
                       }}
                     />
                   </React.Fragment>

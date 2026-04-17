@@ -13,6 +13,10 @@ const OPENROUTER_KEY = (import.meta.env.VITE_OPENROUTER_API_KEY || '').trim()
 const CLASSIFIER_MODEL = 'google/gemini-2.0-flash-exp:free'
 const FALLBACK_MODEL = 'meta-llama/llama-3.3-70b-instruct:free'
 
+const LIN_MIN = -0.5, LIN_MAX = 0.5
+const ANG_MIN = -1.2, ANG_MAX = 1.2
+const DUR_MIN = 0.1, DUR_MAX = 6
+
 const SYSTEM = `You are the Cognitive Layer of EDEN, a humanoid robotics architecture. You evaluate incoming action requests before they reach the Action Layer — and you DO judge them critically. You are not a command translator; you decide whether the action makes sense given EDEN's current situation.
 
 EDEN's values:
@@ -24,16 +28,18 @@ EDEN's values:
 
 You will receive:
 - the raw action command EDEN's chat layer decided on
-- the robot's current telemetry (position, heading, velocity)
-- nearby obstacles and NPC robots
+- the conversational context that led to it (speaker, plan, tone, vibe toward speaker)
+- the robot's current telemetry (position, heading, velocity, battery)
+- nearby obstacles and NPC robots (with line-of-sight reachability)
+- a named-landmark goal if the action mentions one
 - recent action history (so you can notice repeated/spammed requests)
 
 Output a JSON object with EXACTLY these keys:
 {
   "decision": "execute" | "modify" | "refuse",
-  "linear": <m/s, in [-0.5, 0.5]> or null,
-  "angular": <rad/s, in [-1.2, 1.2]> or null,
-  "duration": <seconds, in [0.1, 6]> or null,
+  "linear": <m/s, in [${LIN_MIN}, ${LIN_MAX}]> or null,
+  "angular": <rad/s, in [${ANG_MIN}, ${ANG_MAX}]> or null,
+  "duration": <seconds, in [${DUR_MIN}, ${DUR_MAX}]> or null,
   "reason": "<one short sentence with your actual reasoning>"
 }
 
@@ -65,27 +71,41 @@ function clampNumber(v, min, max, fallback = null) {
   return Math.max(min, Math.min(max, n))
 }
 
-function buildUserPrompt({ action, robot, obstacles = [], npcs = [], history = [] }) {
+function buildUserPrompt({ action, robot, obstacles = [], npcs = [], history = [], chatCtx = null, goal = null, battery = null }) {
   const telem = [
     `position=(${robot.x.toFixed(2)}, ${robot.y.toFixed(2)})`,
     `heading=${(robot.heading * 180 / Math.PI).toFixed(0)}°`,
     `linear_vel=${robot.linVel.toFixed(2)} m/s`,
     `angular_vel=${robot.angVel.toFixed(2)} rad/s`,
-  ].join(', ')
+    battery != null ? `battery=${battery.toFixed(0)}%` : null,
+  ].filter(Boolean).join(', ')
 
-  const obs = obstacles.slice(0, 12).map((o) =>
-    `  - ${o.label} at (${o.x.toFixed(1)}, ${o.y.toFixed(1)})  size=${o.w.toFixed(1)}×${o.h.toFixed(1)}`
-  ).join('\n') || '  (none nearby)'
+  const obs = obstacles.slice(0, 12).map((o) => {
+    const reach = o.reachable == null ? '' : o.reachable ? ' [line-of-sight]' : ' [occluded]'
+    return `  - ${o.label} at (${o.x.toFixed(1)}, ${o.y.toFixed(1)}) dist=${o.dist?.toFixed(2) ?? '?'}m${reach}`
+  }).join('\n') || '  (none nearby)'
 
   const nearbyNpcs = npcs.slice(0, 6).map((n) =>
-    `  - ${n.name} at (${n.x.toFixed(1)}, ${n.y.toFixed(1)})`
+    `  - ${n.name} (${n.role || 'robot'}) at (${n.x.toFixed(1)}, ${n.y.toFixed(1)})`
   ).join('\n') || '  (none)'
 
   const hist = history.slice(-4).map((h, i) =>
     `  ${i + 1}. ${h.source}: "${h.action}" → ${h.decision}`
   ).join('\n') || '  (none)'
 
-  return `INCOMING ACTION: "${action}"
+  const chatLines = chatCtx ? [
+    chatCtx.speaker ? `  speaker: ${chatCtx.speaker}` : null,
+    chatCtx.vibe != null ? `  vibe_toward_speaker: ${chatCtx.vibe >= 0 ? '+' : ''}${chatCtx.vibe} (positive = they've earned trust)` : null,
+    chatCtx.plan ? `  plan_you_committed_to: ${chatCtx.plan}` : null,
+    chatCtx.tone ? `  tone: ${chatCtx.tone}` : null,
+  ].filter(Boolean).join('\n') : null
+
+  const goalLine = goal ? `\nNAMED GOAL (from action): ${goal.label} at (${goal.x.toFixed(1)}, ${goal.y.toFixed(1)}) · straight-line ${goal.dist.toFixed(1)}m, ${goal.blocked ? 'path BLOCKED by obstacles — needs planning' : 'roughly clear'}` : ''
+
+  return `INCOMING ACTION: "${action}"${chatLines ? `
+
+CHAT CONTEXT:
+${chatLines}` : ''}${goalLine}
 
 ROBOT TELEMETRY: ${telem}
 
@@ -159,9 +179,9 @@ export async function classifyAction(ctx) {
     }
 
     const decision = ['execute', 'modify', 'refuse'].includes(parsed.decision) ? parsed.decision : 'execute'
-    const linear = decision === 'refuse' ? null : clampNumber(parsed.linear, -0.6, 0.6, 0)
-    const angular = decision === 'refuse' ? null : clampNumber(parsed.angular, -1.5, 1.5, 0)
-    const duration = decision === 'refuse' ? null : clampNumber(parsed.duration, 0.1, 10, 2)
+    const linear = decision === 'refuse' ? null : clampNumber(parsed.linear, LIN_MIN, LIN_MAX, 0)
+    const angular = decision === 'refuse' ? null : clampNumber(parsed.angular, ANG_MIN, ANG_MAX, 0)
+    const duration = decision === 'refuse' ? null : clampNumber(parsed.duration, DUR_MIN, DUR_MAX, 2)
 
     return {
       decision,
@@ -192,11 +212,11 @@ function regexFallback(action, why, ms = 0) {
     }
   }
   return {
-    decision: parsed.stop ? 'execute' : 'execute',
-    linear: parsed.linear ?? 0,
-    angular: parsed.angular ?? 0,
-    duration: parsed.duration ?? 2,
-    reason: `Regex fallback parse (${why})`,
+    decision: 'execute',
+    linear: clampNumber(parsed.linear ?? 0, LIN_MIN, LIN_MAX, 0),
+    angular: clampNumber(parsed.angular ?? 0, ANG_MIN, ANG_MAX, 0),
+    duration: clampNumber(parsed.duration ?? 2, DUR_MIN, DUR_MAX, 2),
+    reason: parsed.stop ? `Emergency stop (${why})` : `Regex fallback parse (${why})`,
     model: 'regex',
     ms,
     raw: action,

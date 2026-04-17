@@ -8,6 +8,10 @@ import { Cpu, ArrowLeft, Play, Pause, Wifi, Send, Brain, X, Check, Radar, Activi
 import { openSimBusReceiver } from '../lib/simBridge'
 import { classifyAction } from '../lib/cognitiveLayer'
 import { publish, listTopics, Twist, Odometry, LaserScan, TFMessage } from '../lib/rosTopics'
+import { createCostmap } from '../lib/costmap'
+import { planPath, lineOfSight } from '../lib/pathPlanner'
+import { clipForSafety, STOP_DIST, SLOW_DIST } from '../lib/safetyBumper'
+import { autonomousTick } from '../lib/autonomousLoop'
 import "@fontsource/jetbrains-mono"
 
 // ───── World ─────
@@ -115,23 +119,23 @@ function simulateLidar(s) {
 function Floor() {
   return (
     <>
-      {/* Main ground plane */}
-      <mesh rotation={[-Math.PI/2, 0, 0]} position={[WORLD.w/2, 0, WORLD.h/2]}>
+      {/* Main ground plane — matte polished concrete */}
+      <mesh rotation={[-Math.PI/2, 0, 0]} position={[WORLD.w/2, 0, WORLD.h/2]} receiveShadow>
         <planeGeometry args={[WORLD.w, WORLD.h]} />
-        <meshStandardMaterial color="#0b1220" roughness={0.9} metalness={0.1} />
+        <meshStandardMaterial color="#1a1f27" roughness={0.82} metalness={0.08} />
       </mesh>
-      {/* Grid — via drei */}
+      {/* Grid — subtle technical reference */}
       <Grid
-        position={[WORLD.w/2, 0.001, WORLD.h/2]}
+        position={[WORLD.w/2, 0.002, WORLD.h/2]}
         args={[WORLD.w, WORLD.h]}
         cellSize={0.5}
-        cellThickness={0.6}
-        cellColor="#1e3a8a"
+        cellThickness={0.5}
+        cellColor="#243142"
         sectionSize={5}
-        sectionThickness={1}
-        sectionColor="#22d3ee"
-        fadeDistance={35}
-        fadeStrength={1}
+        sectionThickness={0.9}
+        sectionColor="#3b5573"
+        fadeDistance={30}
+        fadeStrength={1.2}
         followCamera={false}
         infiniteGrid={false}
       />
@@ -151,57 +155,159 @@ function Floor() {
 }
 
 function Walls() {
-  // world perimeter
-  const t = 0.05 // thickness
-  const h = 0.3  // height
+  // Solid perimeter walls — painted lab concrete
+  const t = 0.12
+  const h = 1.1
+  const mat = <meshStandardMaterial color="#2a2f38" roughness={0.9} metalness={0.05} />
   return (
     <group>
-      <mesh position={[WORLD.w/2, h/2, 0]}><boxGeometry args={[WORLD.w, h, t]}/><meshStandardMaterial color="#1e3a5f" transparent opacity={0.6}/></mesh>
-      <mesh position={[WORLD.w/2, h/2, WORLD.h]}><boxGeometry args={[WORLD.w, h, t]}/><meshStandardMaterial color="#1e3a5f" transparent opacity={0.6}/></mesh>
-      <mesh position={[0, h/2, WORLD.h/2]}><boxGeometry args={[t, h, WORLD.h]}/><meshStandardMaterial color="#1e3a5f" transparent opacity={0.6}/></mesh>
-      <mesh position={[WORLD.w, h/2, WORLD.h/2]}><boxGeometry args={[t, h, WORLD.h]}/><meshStandardMaterial color="#1e3a5f" transparent opacity={0.6}/></mesh>
+      <mesh position={[WORLD.w/2, h/2, 0]} castShadow receiveShadow><boxGeometry args={[WORLD.w, h, t]}/>{mat}</mesh>
+      <mesh position={[WORLD.w/2, h/2, WORLD.h]} castShadow receiveShadow><boxGeometry args={[WORLD.w, h, t]}/>{mat}</mesh>
+      <mesh position={[0, h/2, WORLD.h/2]} castShadow receiveShadow><boxGeometry args={[t, h, WORLD.h]}/>{mat}</mesh>
+      <mesh position={[WORLD.w, h/2, WORLD.h/2]} castShadow receiveShadow><boxGeometry args={[t, h, WORLD.h]}/>{mat}</mesh>
     </group>
   )
 }
 
+// Material lookup by obstacle label — makes the lab look less like generic boxes
+function obstacleMaterial(label) {
+  const L = label.toLowerCase()
+  if (L.includes('wall'))          return { color: '#3a4150', roughness: 0.9,  metalness: 0.05, emissive: '#000000', emissiveIntensity: 0 }
+  if (L.includes('workbench'))     return { color: '#6b4a2b', roughness: 0.82, metalness: 0.08, emissive: '#000000', emissiveIntensity: 0 } // wood top
+  if (L.includes('bench'))         return { color: '#5a4a38', roughness: 0.85, metalness: 0.05 }
+  if (L.includes('trunk') || L.includes('cable'))
+                                   return { color: '#1a1a1a', roughness: 0.45, metalness: 0.35 }
+  if (L.includes('charging'))      return { color: '#0b4a5a', roughness: 0.35, metalness: 0.5,  emissive: '#22e0ff', emissiveIntensity: 0.6 }
+  if (L.includes('parts bin') || L.includes('bin'))
+                                   return { color: '#2b5f6d', roughness: 0.55, metalness: 0.2 }
+  if (L.includes('server rack'))   return { color: '#0d0f14', roughness: 0.3,  metalness: 0.75, emissive: '#0a4040', emissiveIntensity: 0.15 }
+  if (L.includes('crate') || L.includes('box'))
+                                   return { color: '#8a6a3a', roughness: 0.92, metalness: 0.02 } // cardboard
+  if (L.includes('cone'))          return { color: '#ea6b1f', roughness: 0.6,  metalness: 0.05, emissive: '#4a1a00', emissiveIntensity: 0.15 }
+  if (L.includes('marker'))        return { color: '#d4a017', roughness: 0.4,  metalness: 0.1 }
+  return { color: '#4b5563', roughness: 0.7, metalness: 0.15 }
+}
+
 function Obstacles() {
-  return OBSTACLES.map((o, i) => (
-    <group key={i} position={[o.x, 0, o.y]}>
-      <mesh position={[0, o.height/2, 0]}>
-        <boxGeometry args={[o.w, o.height, o.h]} />
-        <meshStandardMaterial
-          color={o.color || '#5b7392'}
-          roughness={0.7}
-          metalness={0.2}
-          transparent
-          opacity={0.85}
-        />
-      </mesh>
-      {/* Wireframe accent */}
-      <lineSegments position={[0, o.height/2, 0]}>
-        <edgesGeometry args={[new THREE.BoxGeometry(o.w, o.height, o.h)]} />
-        <lineBasicMaterial color={o.color || '#b3cce6'} transparent opacity={0.5} />
-      </lineSegments>
-      <Html position={[0, o.height + 0.15, 0]} center distanceFactor={14} zIndexRange={[0, 0]}>
-        <div className="px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-widest bg-black/60 text-white/70 rounded whitespace-nowrap pointer-events-none">
-          {o.label}
-        </div>
-      </Html>
-    </group>
-  ))
+  return OBSTACLES.map((o, i) => {
+    const mat = obstacleMaterial(o.label)
+    const isCone = /cone/i.test(o.label)
+    const isRack = /server rack/i.test(o.label)
+    return (
+      <group key={i} position={[o.x, 0, o.y]}>
+        {isCone ? (
+          <mesh position={[0, o.height/2, 0]} castShadow receiveShadow>
+            <coneGeometry args={[Math.min(o.w, o.h) / 2, o.height, 16]} />
+            <meshStandardMaterial {...mat} />
+          </mesh>
+        ) : (
+          <mesh position={[0, o.height/2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[o.w, o.height, o.h]} />
+            <meshStandardMaterial {...mat} />
+          </mesh>
+        )}
+        {/* Server rack: add vent stripes */}
+        {isRack && (
+          <group position={[0, 0, 0]}>
+            {[0.4, 0.8, 1.2, 1.6].map((y) => (
+              <mesh key={y} position={[0, y, o.h/2 + 0.001]}>
+                <boxGeometry args={[Math.min(0.5, o.w * 0.8), 0.05, 0.01]} />
+                <meshBasicMaterial color="#0ea5e9" opacity={0.5} transparent />
+              </mesh>
+            ))}
+          </group>
+        )}
+        <Html position={[0, o.height + 0.18, 0]} center distanceFactor={14} zIndexRange={[0, 0]}>
+          <div className="px-1.5 py-0.5 text-[8px] font-mono uppercase tracking-widest bg-black/60 text-white/70 rounded whitespace-nowrap pointer-events-none">
+            {o.label}
+          </div>
+        </Html>
+      </group>
+    )
+  })
+}
+
+function LLMLatencySparkline({ samples }) {
+  if (!samples || samples.length === 0) {
+    return <div className="text-[10px] font-mono text-white/30">no cognitive calls yet…</div>
+  }
+  const max = Math.max(...samples, 300)
+  const avg = Math.round(samples.reduce((a, b) => a + b, 0) / samples.length)
+  const p95 = (() => {
+    const s = [...samples].sort((a, b) => a - b)
+    return s[Math.min(s.length - 1, Math.floor(s.length * 0.95))]
+  })()
+  return (
+    <div>
+      <div className="flex items-end gap-[2px] h-8 mb-1">
+        {samples.map((ms, i) => {
+          const h = Math.max(2, (ms / max) * 32)
+          const color = ms > 2000 ? 'bg-rose-400' : ms > 1000 ? 'bg-amber-400' : 'bg-cyan-400'
+          return <div key={i} style={{ height: `${h}px` }} className={`w-1 rounded-sm ${color}/70`} />
+        })}
+      </div>
+      <div className="flex justify-between text-[9px] font-mono text-white/40 uppercase tracking-widest">
+        <span>avg {avg}ms</span><span>p95 {p95}ms</span><span>n={samples.length}</span>
+      </div>
+    </div>
+  )
+}
+
+function StatCell({ label, value, accent = 'cyan' }) {
+  const colorMap = { cyan: 'text-cyan-300', rose: 'text-rose-300', amber: 'text-amber-300', emerald: 'text-emerald-300' }
+  return (
+    <div className="px-2 py-1 rounded border border-white/10 bg-black/40">
+      <div className={`text-sm font-bold ${colorMap[accent] || 'text-white'}`}>{value}</div>
+      <div className="text-[9px] font-mono text-white/40 uppercase tracking-widest">{label}</div>
+    </div>
+  )
+}
+
+function PathPreview({ waypoints }) {
+  if (!waypoints || waypoints.length < 2) return null
+  const points = waypoints.map((p) => new THREE.Vector3(p.x, 0.05, p.y))
+  const geom = useMemo(() => {
+    const g = new THREE.BufferGeometry().setFromPoints(points)
+    return g
+  }, [waypoints])
+  return (
+    <>
+      <line>
+        <primitive object={geom} attach="geometry" />
+        <lineBasicMaterial color="#22d3ee" linewidth={2} transparent opacity={0.85} />
+      </line>
+      {points.map((p, i) => (
+        <mesh key={i} position={[p.x, 0.12, p.z]}>
+          <sphereGeometry args={[0.07, 8, 8]} />
+          <meshBasicMaterial color={i === 0 ? '#34d399' : i === points.length - 1 ? '#f472b6' : '#22d3ee'} transparent opacity={0.85} />
+        </mesh>
+      ))}
+    </>
+  )
 }
 
 function NpcRobots({ npcsState }) {
   return npcsState.map((n) => (
     <group key={n.name} position={[n.x, 0, n.y]} rotation={[0, -n.heading, 0]}>
-      <mesh position={[0, 0.18, 0]} castShadow>
-        <cylinderGeometry args={[R.radius * 0.8, R.radius * 0.9, 0.35, 16]} />
-        <meshStandardMaterial color={n.color} emissive={n.color} emissiveIntensity={0.25} roughness={0.4} metalness={0.3} />
+      {/* fake contact shadow disc */}
+      <mesh position={[0, 0.003, 0]} rotation={[-Math.PI/2, 0, 0]}>
+        <circleGeometry args={[R.radius * 1.4, 24]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.35} />
+      </mesh>
+      {/* chassis (matte dark) */}
+      <mesh position={[0, 0.14, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[R.radius * 0.95, R.radius * 1.0, 0.22, 20]} />
+        <meshStandardMaterial color="#1a1f28" roughness={0.55} metalness={0.45} />
+      </mesh>
+      {/* upper dome */}
+      <mesh position={[0, 0.34, 0]} castShadow>
+        <cylinderGeometry args={[R.radius * 0.7, R.radius * 0.9, 0.2, 20]} />
+        <meshStandardMaterial color={n.color} emissive={n.color} emissiveIntensity={0.35} roughness={0.4} metalness={0.3} />
       </mesh>
       {/* sensor dot */}
-      <mesh position={[0, 0.4, 0]}>
-        <sphereGeometry args={[0.04, 8, 8]} />
-        <meshBasicMaterial color="#ffffff" />
+      <mesh position={[0, 0.48, 0]}>
+        <sphereGeometry args={[0.05, 12, 12]} />
+        <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.8} />
       </mesh>
       {/* heading arrow */}
       <mesh position={[R.radius, 0.18, 0]} rotation={[0, 0, 0]}>
@@ -259,15 +365,20 @@ function RobotMesh({ stateRef, showOdom }) {
     <>
       {/* Robot body */}
       <group ref={bodyRef}>
+        {/* contact shadow */}
+        <mesh position={[0, 0.003, 0]} rotation={[-Math.PI/2, 0, 0]}>
+          <circleGeometry args={[R.radius * 1.45, 28]} />
+          <meshBasicMaterial color="#000000" transparent opacity={0.42} />
+        </mesh>
         {/* chassis cylinder */}
-        <mesh position={[0, 0.16, 0]} castShadow>
-          <cylinderGeometry args={[R.radius, R.radius * 1.05, 0.3, 24]} />
-          <meshStandardMaterial color="#0a0f14" roughness={0.35} metalness={0.6} />
+        <mesh position={[0, 0.16, 0]} castShadow receiveShadow>
+          <cylinderGeometry args={[R.radius, R.radius * 1.05, 0.3, 32]} />
+          <meshStandardMaterial color="#12161d" roughness={0.35} metalness={0.65} />
         </mesh>
         {/* cyan ring */}
         <mesh position={[0, 0.32, 0]} rotation={[Math.PI/2, 0, 0]}>
           <torusGeometry args={[R.radius * 0.85, 0.02, 12, 48]} />
-          <meshBasicMaterial color="#22e0ff" />
+          <meshStandardMaterial color="#22e0ff" emissive="#22e0ff" emissiveIntensity={1.2} />
         </mesh>
         {/* sensor post (lidar) */}
         <mesh position={[0, 0.45, 0]} castShadow>
@@ -275,19 +386,19 @@ function RobotMesh({ stateRef, showOdom }) {
           <meshStandardMaterial color="#0a0f14" roughness={0.2} metalness={0.9} />
         </mesh>
         <mesh position={[0, 0.5, 0]}>
-          <sphereGeometry args={[0.06, 16, 16]} />
-          <meshBasicMaterial color="#22e0ff" />
+          <sphereGeometry args={[0.06, 20, 20]} />
+          <meshStandardMaterial color="#22e0ff" emissive="#22e0ff" emissiveIntensity={1.5} />
         </mesh>
         {/* heading arrow */}
         <mesh position={[R.radius + 0.05, 0.16, 0]} rotation={[0, 0, -Math.PI/2]}>
           <coneGeometry args={[0.1, 0.2, 12]} />
-          <meshBasicMaterial color="#22e0ff" />
+          <meshStandardMaterial color="#22e0ff" emissive="#22e0ff" emissiveIntensity={0.9} />
         </mesh>
         {/* wheels */}
         {[-1, 1].map((s) => (
-          <mesh key={s} position={[0, 0.08, s * R.wheel_base/2]} rotation={[0, 0, Math.PI/2]}>
-            <cylinderGeometry args={[R.wheel_r, R.wheel_r, 0.05, 12]} />
-            <meshStandardMaterial color="#0f172a" roughness={0.95} />
+          <mesh key={s} position={[0, 0.08, s * R.wheel_base/2]} rotation={[0, 0, Math.PI/2]} castShadow>
+            <cylinderGeometry args={[R.wheel_r, R.wheel_r, 0.05, 16]} />
+            <meshStandardMaterial color="#0a0d13" roughness={0.95} metalness={0.1} />
           </mesh>
         ))}
         {/* label */}
@@ -401,7 +512,7 @@ function CameraRig({ stateRef, follow }) {
 }
 
 // ───── Minimap 2D overlay ─────
-function Minimap({ stateRef }) {
+function Minimap({ stateRef, costmapRef, pathPreview }) {
   const canvasRef = useRef()
   useEffect(() => {
     let raf
@@ -414,16 +525,52 @@ function Minimap({ stateRef }) {
       ctx.clearRect(0, 0, W, H)
       ctx.fillStyle = 'rgba(8, 16, 28, 0.9)'
       ctx.fillRect(0, 0, W, H)
-      // obstacles
-      for (const o of OBSTACLES) {
-        ctx.fillStyle = 'rgba(180,210,240,0.55)'
-        ctx.fillRect((o.x - o.w/2) * pm, (o.y - o.h/2) * pm, o.w * pm, o.h * pm)
+
+      // costmap overlay (Bayesian occupancy + inflation)
+      const cm = costmapRef?.current
+      if (cm) {
+        const snap = cm.snapshot()
+        const cs = snap.res * pm
+        for (let r = 0; r < snap.rows; r++) {
+          for (let k = 0; k < snap.cols; k++) {
+            const v = snap.data[r * snap.cols + k]
+            if (v === 1) continue // unknown → skip
+            if (v === 2) ctx.fillStyle = 'rgba(244,114,182,0.75)'      // lethal
+            else if (v === 3) ctx.fillStyle = 'rgba(34,211,238,0.22)'   // inflation band
+            else ctx.fillStyle = 'rgba(16,185,129,0.08)'                // free
+            ctx.fillRect(k * cs, r * cs, cs + 0.5, cs + 0.5)
+          }
+        }
       }
+
+      // ground-truth obstacles (dim outline)
+      for (const o of OBSTACLES) {
+        ctx.strokeStyle = 'rgba(200,220,255,0.3)'
+        ctx.lineWidth = 0.5
+        ctx.strokeRect((o.x - o.w/2) * pm, (o.y - o.h/2) * pm, o.w * pm, o.h * pm)
+      }
+
+      // path preview
+      if (pathPreview && pathPreview.length > 1) {
+        ctx.strokeStyle = 'rgba(34,211,238,0.9)'
+        ctx.lineWidth = 1.5
+        ctx.beginPath()
+        ctx.moveTo(pathPreview[0].x * pm, pathPreview[0].y * pm)
+        for (let i = 1; i < pathPreview.length; i++) {
+          ctx.lineTo(pathPreview[i].x * pm, pathPreview[i].y * pm)
+        }
+        ctx.stroke()
+        const last = pathPreview[pathPreview.length - 1]
+        ctx.fillStyle = '#f472b6'
+        ctx.beginPath(); ctx.arc(last.x * pm, last.y * pm, 3, 0, Math.PI*2); ctx.fill()
+      }
+
       // npcs
       for (const n of NPCS) {
         ctx.fillStyle = n.color
         ctx.beginPath(); ctx.arc(n.x * pm, n.y * pm, 3, 0, Math.PI*2); ctx.fill()
       }
+
       const s = stateRef.current
       ctx.fillStyle = '#22e0ff'
       ctx.beginPath(); ctx.arc(s.x * pm, s.y * pm, 4, 0, Math.PI*2); ctx.fill()
@@ -439,18 +586,52 @@ function Minimap({ stateRef }) {
     }
     raf = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(raf)
-  }, [])
-  const W = 240, H = W * (WORLD.h / WORLD.w)
+  }, [pathPreview])
+  const W = 280, H = W * (WORLD.h / WORLD.w)
   return (
     <div className="absolute top-3 right-3 pointer-events-none">
-      <div className="mb-1 text-[9px] font-mono uppercase tracking-widest text-white/50">MINIMAP · /map</div>
+      <div className="mb-1 text-[9px] font-mono uppercase tracking-widest text-white/50 flex gap-3">
+        <span>MINIMAP · /map</span>
+        <span className="text-rose-300">▮ lethal</span>
+        <span className="text-cyan-300">▮ inflation</span>
+        <span className="text-emerald-300">▮ free</span>
+      </div>
       <canvas ref={canvasRef} width={W} height={H} className="rounded border border-white/15 shadow-2xl" />
     </div>
   )
 }
 
+// Landmark lookup for named goals ("drive to workbench A" → a coordinate)
+const LANDMARKS = OBSTACLES.filter((o) => /^(workbench|dock|bin|rack|crate|cone|bench|marker|charging)/i.test(o.label))
+  .map((o) => ({ label: o.label.toLowerCase(), x: o.x, y: o.y, w: o.w, h: o.h }))
+
+function findLandmark(text) {
+  if (!text) return null
+  const t = text.toLowerCase()
+  // Exact/partial phrase matches first
+  for (const lm of LANDMARKS) {
+    if (t.includes(lm.label)) return lm
+  }
+  // Token-level fuzzy: "workbench a" matches "workbench a"
+  const words = t.split(/\s+/)
+  for (const lm of LANDMARKS) {
+    const lw = lm.label.split(/\s+/)
+    if (lw.every((w) => words.includes(w))) return lm
+  }
+  return null
+}
+
+function estimateExploredFraction(cm) {
+  // Fraction of cells with non-zero log-odds magnitude (i.e. observed)
+  const lo = cm.logOdds
+  let seen = 0
+  for (let i = 0; i < lo.length; i++) if (Math.abs(lo[i]) > 0.15) seen++
+  return seen / lo.length
+}
+
 // ───── Main ─────
 export default function Simulator() {
+  const costmapRef = useRef(createCostmap({ worldW: WORLD.w, worldH: WORLD.h, res: 0.25, inflateRadius: 0.5 }))
   const stateRef = useRef({
     x: 2.5, y: 10, heading: 0,
     linVel: 0, angVel: 0,
@@ -461,7 +642,15 @@ export default function Simulator() {
     trail: [],
     lastTick: performance.now(),
     lastOdomPub: 0, lastScanPub: 0, lastTFPub: 0,
+    lastCostmapUpdate: 0, lastCostmapInflate: 0,
     collisions: 0,
+    bumperStops: 0,
+    distanceTraveled: 0,
+    battery: 100,          // percent; drains under motion, recharges at dock
+    path: [],              // current waypoint list (world coords) from planner
+    pathGoal: null,        // { label, x, y }
+    pathIdx: 0,
+    lastSafetyReason: null,
   })
   const [telemetry, setTelemetry] = useState({ x: 2.5, y: 10, heading: 0, linVel: 0, angVel: 0, wheelL: 0, wheelR: 0, odomDrift: 0 })
   const [topicsSnap, setTopicsSnap] = useState([])
@@ -475,9 +664,23 @@ export default function Simulator() {
   const [showOdom, setShowOdom] = useState(true)
   const [followCam, setFollowCam] = useState(true)
   const [npcsState, setNpcsState] = useState(NPCS.map((n) => ({ ...n, heading: Math.random() * Math.PI * 2 })))
+  const [goals, setGoals] = useState([])
+  const [batteryPct, setBatteryPct] = useState(100)
+  const [thoughts, setThoughts] = useState([])        // autonomous-loop thought stream
+  const [llmLatency, setLlmLatency] = useState([])    // last ~20 ms samples
+  const [pathPreview, setPathPreview] = useState([])  // for 3D overlay
+
+  // Latest-value refs — fix stale-closure in bus receiver / physics loop
+  const latestRef = useRef({ log, useLLM, npcsState, goals, batteryPct })
+  useEffect(() => {
+    latestRef.current = { log, useLLM, npcsState, goals, batteryPct }
+  }, [log, useLLM, npcsState, goals, batteryPct])
+  const applyActionRef = useRef(null)
 
   useEffect(() => {
-    const close = openSimBusReceiver((payload) => { applyAction(payload.action, 'eden') })
+    const close = openSimBusReceiver((payload) => {
+      applyActionRef.current?.(payload.action, payload.meta?.source || 'eden', payload.meta)
+    })
     setConnected(true)
     return () => { close(); setConnected(false) }
   }, [])
@@ -501,7 +704,9 @@ export default function Simulator() {
         s.x = 2.5; s.y = 10; s.heading = 0
         s.linVel = 0; s.angVel = 0; s.cmdLin = 0; s.cmdAng = 0; s.cmdUntil = 0
         s.odomX = 2.5; s.odomY = 10; s.odomHeading = 0
-        s.trail = []; s.collisions = 0
+        s.trail = []; s.collisions = 0; s.bumperStops = 0; s.distanceTraveled = 0
+        s.path = []; s.pathGoal = null; s.pathIdx = 0; s.battery = 100
+        setPathPreview([]); setBatteryPct(100)
       }
       if (e.code === 'KeyC') setFollowCam((f) => !f)
     }
@@ -509,33 +714,84 @@ export default function Simulator() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  async function applyAction(rawAction, source) {
+  async function applyAction(rawAction, source, chatCtx = null) {
     const ts = Date.now()
     const s = stateRef.current
-    if (!useLLM || source === 'manual-direct') {
+    const { log: latestLog, useLLM: latestUseLLM, npcsState: latestNpcs, batteryPct: latestBat } = latestRef.current
+
+    if (!latestUseLLM || source === 'manual-direct') {
       const { parseAction } = await import('../lib/simBridge')
       const parsed = parseAction(rawAction)
-      const entry = { ts, source, action: rawAction, decision: parsed ? 'execute' : 'refuse', reason: parsed ? 'direct' : 'unparseable', linear: parsed?.linear, angular: parsed?.angular, duration: parsed?.duration, model: 'regex', ms: 0 }
+      const entry = { ts, source, action: rawAction, decision: parsed ? 'execute' : 'refuse', reason: parsed ? 'direct (cognitive gate off)' : 'unparseable', linear: parsed?.linear, angular: parsed?.angular, duration: parsed?.duration, model: 'regex', ms: 0 }
       setLog((p) => [entry, ...p].slice(0, 50))
       if (!parsed) return
       commitCmd(parsed.linear, parsed.angular, parsed.duration, parsed.stop)
+      maybePlanToLandmark(rawAction)
       return
     }
+
     setThinking({ action: rawAction, source })
-    const obstacles = OBSTACLES.filter((o) => dist({x:s.x,y:s.y}, o) < 8)
-    const npcs = npcsState.filter((n) => dist({x:s.x,y:s.y}, n) < R.detection_r * 1.5)
-    const history = log.slice(0, 4).map((l) => ({ source: l.source, action: l.action, decision: l.decision }))
+
+    // Build rich context for the LLM
+    const obstacles = OBSTACLES
+      .map((o) => {
+        const d = Math.hypot(o.x - s.x, o.y - s.y)
+        return { ...o, dist: d, reachable: lineOfSight(costmapRef.current, { x: s.x, y: s.y }, { x: o.x, y: o.y }) }
+      })
+      .filter((o) => o.dist < 8)
+      .sort((a, b) => a.dist - b.dist)
+    const npcs = latestNpcs.filter((n) => Math.hypot(n.x - s.x, n.y - s.y) < R.detection_r * 1.5)
+    const history = latestLog.slice(0, 4).map((l) => ({ source: l.source, action: l.action, decision: l.decision }))
+
+    // Named-landmark goal extraction
+    const lm = findLandmark(rawAction)
+    let goal = null
+    if (lm) {
+      const d = Math.hypot(lm.x - s.x, lm.y - s.y)
+      const clear = lineOfSight(costmapRef.current, { x: s.x, y: s.y }, { x: lm.x, y: lm.y })
+      goal = { label: lm.label, x: lm.x, y: lm.y, dist: d, blocked: !clear }
+    }
+
     const res = await classifyAction({
       action: rawAction,
       robot: { x: s.x, y: s.y, heading: s.heading, linVel: s.linVel, angVel: s.angVel },
       obstacles, npcs, history,
+      chatCtx, goal, battery: latestBat,
     })
     setThinking(null)
-    const entry = { ts, source, action: rawAction, decision: res.decision, reason: res.reason, linear: res.linear, angular: res.angular, duration: res.duration, model: res.model, ms: res.ms }
+    setLlmLatency((p) => [...p, res.ms].slice(-20))
+    const entry = { ts, source, action: rawAction, decision: res.decision, reason: res.reason, linear: res.linear, angular: res.angular, duration: res.duration, model: res.model, ms: res.ms, goal: goal?.label || null }
     setLog((p) => [entry, ...p].slice(0, 50))
     if (res.decision === 'refuse' || res.linear === null) return
+
+    // If there's a landmark goal, plan a path and follow waypoints instead of a blind cmd
+    if (goal) {
+      maybePlanToLandmark(rawAction, goal)
+    }
     commitCmd(res.linear, res.angular, res.duration, false)
   }
+
+  function maybePlanToLandmark(rawAction, goal = null) {
+    const s = stateRef.current
+    const lm = goal || (() => {
+      const L = findLandmark(rawAction)
+      return L ? { label: L.label, x: L.x, y: L.y } : null
+    })()
+    if (!lm) return
+    // Re-inflate costmap immediately so recent LIDAR has effect
+    costmapRef.current.rebuildInflation()
+    const plan = planPath(costmapRef.current, { x: s.x, y: s.y }, { x: lm.x, y: lm.y })
+    if (plan.ok && plan.waypoints.length > 1) {
+      s.path = plan.waypoints
+      s.pathGoal = lm
+      s.pathIdx = 1 // skip start cell
+      setPathPreview(plan.waypoints)
+      publish('/plan', { _type: 'nav_msgs/Path', poses: plan.waypoints, header: { stamp: performance.now(), frame_id: 'map' } })
+    }
+  }
+
+  // Expose applyAction to the (stale-deps) receiver via ref
+  useEffect(() => { applyActionRef.current = applyAction })
 
   function commitCmd(lin, ang, dur, stop) {
     const s = stateRef.current
@@ -553,8 +809,53 @@ export default function Simulator() {
       const dt = Math.min(0.05, (now - s.lastTick) / 1000)
       s.lastTick = now
       if (running) {
-        const targetLin = now > s.cmdUntil ? 0 : s.cmdLin
-        const targetAng = now > s.cmdUntil ? 0 : s.cmdAng
+        // ─── Local planner: if we have a path, generate (linear, angular) toward the next waypoint
+        let pathLin = null, pathAng = null
+        if (s.path && s.path.length > 0 && s.pathIdx < s.path.length) {
+          const wp = s.path[s.pathIdx]
+          const dx = wp.x - s.x, dy = wp.y - s.y
+          const dToWp = Math.hypot(dx, dy)
+          if (dToWp < 0.35) {
+            s.pathIdx += 1
+            if (s.pathIdx >= s.path.length) {
+              s.path = []; s.pathGoal = null; s.pathIdx = 0
+              setPathPreview([])
+            }
+          } else {
+            const targetHeading = Math.atan2(dy, dx)
+            let dh = targetHeading - s.heading
+            while (dh > Math.PI) dh -= 2 * Math.PI
+            while (dh < -Math.PI) dh += 2 * Math.PI
+            // Turn-in-place when heading is off; otherwise drive + correct
+            if (Math.abs(dh) > 0.6) {
+              pathLin = 0
+              pathAng = clamp(Math.sign(dh) * Math.min(1.0, Math.abs(dh) * 2), -R.max_ang, R.max_ang)
+            } else {
+              pathLin = clamp(0.3 * (1 - Math.abs(dh) / 0.6), 0.05, R.max_lin)
+              pathAng = clamp(dh * 1.4, -R.max_ang, R.max_ang)
+            }
+            s.cmdUntil = now + 600 // keep alive while following
+          }
+        }
+
+        // Priority: path-follower > cmdUntil-gated cmd > decay
+        const gated = now > s.cmdUntil
+        let targetLin = pathLin != null ? pathLin : (gated ? 0 : s.cmdLin)
+        let targetAng = pathAng != null ? pathAng : (gated ? 0 : s.cmdAng)
+
+        // Safety bumper — clip the velocity if something's in the front arc
+        const bumper = clipForSafety({
+          cmdLin: targetLin,
+          cmdAng: targetAng,
+          lidar: s.lidar,
+          fov: R.lidar_fov,
+          reversing: targetLin < 0,
+        })
+        if (bumper.reason) s.lastSafetyReason = bumper.reason
+        if (bumper.cmdLin !== targetLin && Math.abs(targetLin) > 0.05 && bumper.cmdLin === 0) s.bumperStops += 1
+        targetLin = bumper.cmdLin
+        targetAng = bumper.cmdAng
+
         const alpha = 1 - Math.exp(-dt / R.motor_tau)
         let newLin = s.linVel + (targetLin - s.linVel) * alpha
         let newAng = s.angVel + (targetAng - s.angVel) * alpha
@@ -574,9 +875,22 @@ export default function Simulator() {
                  || nextX < R.radius || nextX > WORLD.w - R.radius
                  || nextY < R.radius || nextY > WORLD.h - R.radius
                  || npcsState.some((n) => dist({x:nextX,y:nextY}, n) < R.radius + 0.35)
-        if (!hit) { s.x = nextX; s.y = nextY }
-        else { s.linVel = 0; s.collisions += 1 }
+        if (!hit) {
+          s.distanceTraveled += Math.hypot(nextX - s.x, nextY - s.y)
+          s.x = nextX; s.y = nextY
+        } else {
+          s.linVel = 0; s.collisions += 1
+        }
         s.heading = nextHeading
+
+        // Battery model: base 0.2%/min + 0.8%/min × |linVel|/max_lin + 0.3%/min × |angVel|/max_ang
+        const drainPerSec = (0.2 + 0.8 * Math.abs(s.linVel) / R.max_lin + 0.3 * Math.abs(s.angVel) / R.max_ang) / 60
+        s.battery = Math.max(0, s.battery - drainPerSec * dt)
+        // Recharge at the charging dock
+        const dock = OBSTACLES.find((o) => o.label === 'charging dock')
+        if (dock && Math.hypot(s.x - dock.x, s.y - dock.y) < 1.0) {
+          s.battery = Math.min(100, s.battery + (8 / 60) * dt) // 8%/min
+        }
 
         const n = R.odom_noise
         const oL = s.linVel * (1 + (Math.random()-0.5)*n)
@@ -592,6 +906,23 @@ export default function Simulator() {
 
         s.lidar = simulateLidar(s)
 
+        // Costmap integration — run at ~10Hz, re-inflate at ~2Hz
+        if (now - s.lastCostmapUpdate > 100) {
+          costmapRef.current.integrateLidar({
+            x: s.x, y: s.y, heading: s.heading,
+            ranges: s.lidar,
+            angle_min: -R.lidar_fov / 2,
+            angle_max: R.lidar_fov / 2,
+            range_max: R.lidar_range,
+          })
+          s.lastCostmapUpdate = now
+        }
+        if (now - s.lastCostmapInflate > 500) {
+          costmapRef.current.rebuildInflation()
+          s.lastCostmapInflate = now
+          publish('/map', { _type: 'nav_msgs/OccupancyGrid', info: { resolution: costmapRef.current.res, width: costmapRef.current.cols, height: costmapRef.current.rows } })
+        }
+
         if (now - s.lastOdomPub > 20) {
           publish('/odom', Odometry({ x: s.odomX, y: s.odomY, heading: s.odomHeading, linVel: s.linVel, angVel: s.angVel, ts: now }))
           s.lastOdomPub = now
@@ -606,6 +937,11 @@ export default function Simulator() {
         }
       }
       setTelemetry({ x: s.x, y: s.y, heading: s.heading, linVel: s.linVel, angVel: s.angVel, wheelL: s.wheelL, wheelR: s.wheelR, odomDrift: Math.hypot(s.odomX - s.x, s.odomY - s.y) })
+      // Battery sync at ~2Hz to avoid re-rendering 60 times a second
+      if (!s.lastBatSync || now - s.lastBatSync > 500) {
+        setBatteryPct(s.battery)
+        s.lastBatSync = now
+      }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
@@ -634,6 +970,48 @@ export default function Simulator() {
   useEffect(() => {
     const h = setInterval(() => setTopicsSnap(listTopics()), 200)
     return () => clearInterval(h)
+  }, [])
+
+  // Autonomous loop — 20s cadence. Hard-coded battery rule overrides LLM if
+  // we're critically low (go to the dock), otherwise asks the LLM what to do.
+  useEffect(() => {
+    let active = true
+    async function tick() {
+      if (!active) return
+      const s = stateRef.current
+      const { goals: latestGoals, batteryPct: latestBat, log: latestLog, npcsState: latestNpcs } = latestRef.current
+
+      // Hard rule: low battery → drive to dock (no LLM needed, always safe)
+      if (latestBat < 20 && !(s.pathGoal && s.pathGoal.label === 'charging dock')) {
+        setThoughts((p) => [{ ts: Date.now(), thought: `battery at ${latestBat.toFixed(0)}% — heading to charging dock`, action: 'head to charging dock', auto: true }, ...p].slice(0, 8))
+        applyActionRef.current?.('head to charging dock', 'auto-battery')
+        return
+      }
+
+      // Skip tick if we're actively moving or following a plan
+      if (s.pathGoal || Math.abs(s.linVel) > 0.05 || stateRef.current.cmdUntil > performance.now() + 200) return
+
+      const unexplored = 1 - estimateExploredFraction(costmapRef.current)
+      const recentActions = latestLog.slice(0, 4).map((l) => `${l.action} → ${l.decision}`)
+      const res = await autonomousTick({
+        robot: { x: s.x, y: s.y, heading: s.heading, linVel: s.linVel, angVel: s.angVel },
+        obstacles: OBSTACLES, npcs: latestNpcs, goals: latestGoals,
+        battery: latestBat, recentActions, unexploredFraction: unexplored, recentMemories: [],
+      })
+      if (!res || !active) return
+
+      setThoughts((p) => [{ ts: Date.now(), thought: res.thought, action: res.action, reason: res.reason, auto: true }, ...p].slice(0, 8))
+      if (res.goal_add) setGoals((g) => [...g, res.goal_add].slice(-8))
+      if (res.goal_done) setGoals((g) => g.filter((x) => x !== res.goal_done))
+      if (res.action && res.action !== 'none') {
+        applyActionRef.current?.(res.action, 'auto-loop')
+      }
+      // TODO: post_to_chat → would reach the chat window via a new bus event; out of scope for v1
+    }
+    const h = setInterval(tick, 20000)
+    // Kick it off quickly once so the loop is visible
+    const kick = setTimeout(tick, 4000)
+    return () => { active = false; clearInterval(h); clearTimeout(kick) }
   }, [])
 
   function handleManualSubmit(e) {
@@ -690,12 +1068,36 @@ export default function Simulator() {
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_380px] overflow-hidden">
         {/* 3D World */}
         <div className="relative overflow-hidden">
-          <Canvas camera={{ position: [WORLD.w/2, 18, WORLD.h + 6], fov: 45 }} style={{ background: 'radial-gradient(ellipse at center, #0a1220 0%, #000 85%)' }}>
+          <Canvas
+            shadows
+            dpr={[1, 2]}
+            camera={{ position: [WORLD.w/2, 18, WORLD.h + 6], fov: 45 }}
+            gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
+            style={{ background: 'radial-gradient(ellipse at center, #121822 0%, #050709 85%)' }}
+          >
             <Suspense fallback={null}>
-              <ambientLight intensity={0.35} />
-              <directionalLight position={[10, 16, 8]} intensity={0.8} />
-              <pointLight position={[WORLD.w/2, 8, WORLD.h/2]} intensity={0.3} color="#22e0ff" />
-              <fog attach="fog" args={['#050810', 20, 50]} />
+              <ambientLight intensity={0.22} color="#b8c6d8" />
+              <hemisphereLight args={[0xbcd4ea, 0x1a1410, 0.38]} />
+              <directionalLight
+                position={[WORLD.w * 0.35, 22, WORLD.h * 0.25]}
+                intensity={1.25}
+                color="#ffe8c7"
+                castShadow
+                shadow-mapSize-width={2048}
+                shadow-mapSize-height={2048}
+                shadow-camera-left={-WORLD.w * 0.7}
+                shadow-camera-right={WORLD.w * 0.7}
+                shadow-camera-top={WORLD.h * 0.7}
+                shadow-camera-bottom={-WORLD.h * 0.7}
+                shadow-camera-near={1}
+                shadow-camera-far={60}
+                shadow-bias={-0.0003}
+              />
+              {/* Cool rim fill for depth */}
+              <directionalLight position={[-5, 8, -5]} intensity={0.28} color="#7fb3d9" />
+              {/* Soft cyan room accent */}
+              <pointLight position={[WORLD.w/2, 6, WORLD.h/2]} intensity={0.22} color="#22d3ee" distance={20} decay={2} />
+              <fog attach="fog" args={['#0a0d14', 22, 55]} />
 
               <Floor />
               <Walls />
@@ -703,6 +1105,7 @@ export default function Simulator() {
               <NpcRobots npcsState={npcsState} />
               <RobotMesh stateRef={stateRef} showOdom={showOdom} />
               <LidarRays stateRef={stateRef} show={showLidar} />
+              <PathPreview waypoints={pathPreview} />
 
               <CameraRig stateRef={stateRef} follow={followCam} />
               {!followCam && <OrbitControls enableDamping dampingFactor={0.12} target={[WORLD.w/2, 0, WORLD.h/2]} />}
@@ -733,7 +1136,7 @@ export default function Simulator() {
             ↑↓ drive · ←→ turn · space stop · R reset · C toggle follow cam · drag to orbit (when follow off)
           </div>
 
-          <Minimap stateRef={stateRef} />
+          <Minimap stateRef={stateRef} costmapRef={costmapRef} pathPreview={pathPreview} />
 
           <AnimatePresence>
             {thinking && (
@@ -785,6 +1188,59 @@ export default function Simulator() {
             <Row l="odom_drift"  v={telemetry.odomDrift.toFixed(3)}  u="m" hi={telemetry.odomDrift>0.1}/>
             <Row l="lidar_min"   v={lidarMin.toFixed(2)}             u="m" hi={lidarMin<0.8}/>
             <Row l="collisions"  v={stateRef.current.collisions}     u="" hi={stateRef.current.collisions>0}/>
+            <Row l="bumper_stop" v={stateRef.current.bumperStops}    u="" hi={stateRef.current.bumperStops>0}/>
+            <Row l="distance"    v={stateRef.current.distanceTraveled.toFixed(1)} u="m"/>
+            <Row l="battery"     v={batteryPct.toFixed(0)}           u="%" hi={batteryPct<25}/>
+            {stateRef.current.pathGoal && (
+              <div className="mt-2 px-2 py-1.5 rounded border border-cyan-400/30 bg-cyan-400/5 text-[10px] font-mono">
+                <div className="text-cyan-300 uppercase tracking-widest mb-0.5">active goal</div>
+                <div className="text-white/80">→ {stateRef.current.pathGoal.label}</div>
+                <div className="text-white/40">waypoint {stateRef.current.pathIdx}/{stateRef.current.path.length}</div>
+              </div>
+            )}
+          </div>
+
+          {/* Metrics panel — cognition + autonomy */}
+          <div className="px-4 py-3 border-b border-white/10">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Brain size={11} className="text-violet-300"/>
+              <span className="text-[11px] font-mono uppercase tracking-widest text-violet-300">Cognition metrics</span>
+            </div>
+            <LLMLatencySparkline samples={llmLatency} />
+            <div className="grid grid-cols-3 gap-1.5 mt-2">
+              <StatCell label="decisions" value={log.length} />
+              <StatCell label="refused" value={log.filter((l) => l.decision === 'refuse').length} accent="rose" />
+              <StatCell label="modified" value={log.filter((l) => l.decision === 'modify').length} accent="amber" />
+            </div>
+          </div>
+
+          {/* Goals + autonomous thoughts */}
+          <div className="px-4 py-3 border-b border-white/10">
+            <div className="flex items-center gap-1.5 mb-2">
+              <Activity size={11} className="text-emerald-300"/>
+              <span className="text-[11px] font-mono uppercase tracking-widest text-emerald-300">Goals · autonomous loop</span>
+              <span className="ml-auto text-[9px] font-mono text-white/30">{thoughts.length}</span>
+            </div>
+            {goals.length === 0 ? (
+              <p className="text-[10px] font-mono text-white/30">no goals · idle</p>
+            ) : (
+              <ul className="space-y-1 mb-2">
+                {goals.map((g, i) => (
+                  <li key={i} className="text-[10px] font-mono text-white/70 flex items-center gap-1.5">
+                    <span className="w-1 h-1 rounded-full bg-emerald-400"/>{g}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {thoughts.length > 0 && (
+              <div className="mt-1 text-[10px] font-mono space-y-1 max-h-24 overflow-y-auto eden-chat-scroll">
+                {thoughts.slice(0, 4).map((t) => (
+                  <div key={t.ts} className="text-white/50 italic">
+                    <span className="text-white/30">{new Date(t.ts).toLocaleTimeString().slice(0, 5)}</span> · {t.thought}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="px-4 py-3 border-b border-white/10">
